@@ -17,8 +17,8 @@ import json
 
 load_dotenv()
 
-telegram_got_token = os.getenv('telegram_got_token') # тут прописан ID телеграм бота
-telegram_chat_id = os.getenv('telegram_chat_id') # тут прописан ID общего чата
+telegram_got_token = os.getenv('telegram_got_token')  # тут прописан ID телеграм бота
+telegram_chat_id = os.getenv('telegram_chat_id')  # тут прописан ID общего чата
 telegram = get_notifier('telegram')
 
 
@@ -28,7 +28,7 @@ def get_orders_yandex_market():
     url_ym = f'https://api.partner.market.yandex.ru/campaigns/{campaign_id}/orders'
     headers = {"Authorization": f"Bearer {ym_token}"}
     params = {
-        "fake": "true",
+        "fake": "false",
         "status": "PROCESSING",
         "substatus": "STARTED"
     }
@@ -38,33 +38,15 @@ def get_orders_yandex_market():
         orders_data = response.json().get('orders', [])  # Получаем список заказов из ключа 'orders'
         return orders_data  # Возвращаем список заказов
 
+
 def get_orders_wildberries():
     wb_api_token = os.getenv('wb_token')
     url = 'https://suppliers-api.wildberries.ru/api/v3/orders/new'
     headers = {'Authorization': wb_api_token}
     response = requests.get(url, headers=headers)
-    # print('WB', response.status_code)
     if response.status_code == 200:
         orders = response.json().get('orders', [])
         return orders
-# Ниже рабочий код, который высылает все сборочные задания
-# def get_orders_wildberries():
-#     wb_api_token = os.getenv('wb_token')
-#     url = 'https://suppliers-api.wildberries.ru/api/v3/orders'
-#     headers = {'Authorization': wb_api_token}
-#     params = {
-#         'limit': 1000,  # Максимальное количество возвращаемых данных
-#         'next': 0,  # Для получения полного списка данных
-#         # Установите необходимые даты начала и конца периода для получения архивных заказов
-#         # Например, для получения всех заказов за предыдущий месяц:
-#         # 'dateFrom': <значение_даты_начала_периода_unix_timestamp>,
-#         # 'dateTo': <значение_даты_конца_периода_unix_timestamp>
-#     }
-#     response = requests.get(url, headers=headers, params=params)
-#     print('WB', response.status_code)
-#     if response.status_code == 200:
-#         orders = response.json().get('orders', [])
-#         return orders
 
 
 def write_order_id_to_file(order_id, filename):
@@ -89,8 +71,10 @@ def write_order_id_to_file(order_id, filename):
             # Если ID уже существует в файле, ничего не делаем и возвращаем False
             return False
 
+
 # Путь к файлу, куда вы хотите записывать ID заказов
 file_path = 'order_ids.txt'
+
 
 def notify_about_new_orders(orders, platform, supplier):
     if not orders:
@@ -105,7 +89,7 @@ def notify_about_new_orders(orders, platform, supplier):
                 message += f"ID заказа: {order.get('id')}\n"
                 if supplier == 'Yandex.Market':
                     for item in order.get('items', []):
-                        message += f"Товар: {item.get('offerName')}\nЦена: {int(item.get('price'))} р.\n"
+                        message += f"Товар: {item.get('offerName')}\nЦена: {int(item.get('buyerPriceBeforeDiscount'))} р.\n"
                 elif supplier == 'Wildberries':
                     message += f"Артикул: {order.get('article')} \n"
                     message += f"Цена: {str(order.get('price'))[:-2]} р.\n"
@@ -119,4 +103,3 @@ def check_for_new_orders():
 
     orders_wildberries = get_orders_wildberries()
     notify_about_new_orders(orders_wildberries, "Wildberries", "Wildberries")
-

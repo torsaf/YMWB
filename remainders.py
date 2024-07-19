@@ -1,6 +1,6 @@
 """
 Функции модуля:
-- gen_sklad: получает данные о запасах из Google Таблицы и фильтрует их для дальнейшего обновления.
+- gen_sklad: получает данные о запасах из файла sklad_prices и фильтрует их для дальнейшего обновления.
 - wb_update: обновляет данные о запасах на складе Wildberries.
 - ym_update: обновляет данные о запасах на складе Yandex.Market.
 
@@ -22,26 +22,30 @@ telegram = get_notifier('telegram')
 
 
 def gen_sklad():
-    gc = gspread.service_account(filename='my-python-397519-3688db4697d6.json')
-    sh = gc.open("КАЗНА")
-    worksheet_name = "СКЛАД"
-    worksheet = sh.worksheet(worksheet_name)
-    data = worksheet.get('A1:Q')
-    data = [row for row in data if any(cell.strip() for cell in row)]
-    data = [[cell.strip() for cell in row] for row in data]
-    filtered_data = [row for row in data[1:] if 'SKL' in row]
-    columns = data[0]
-    data = filtered_data
-    sklad = pd.DataFrame(data, columns=columns)
-    desired_columns = ['Артикул', 'Статус', 'Модель', 'Наличие', 'WB']
-    sklad = sklad.loc[:, desired_columns]
-    sklad_filtered = sklad[sklad['Статус'] == 'На складе']
-    ym_frame = sklad_filtered[sklad_filtered['Наличие'].notna()][['Артикул', 'Наличие']].dropna(subset=['Наличие'])
-    wb_frame = sklad_filtered[sklad_filtered['WB'].notna()][['WB', 'Наличие']].dropna(subset=['Наличие'])
+    # Установить параметры pandas для полного вывода всех столбцов
+    pd.set_option('display.max_columns', None)  # отображать все столбцы
+    pd.set_option('display.width', 1000)  # установить ширину вывода
+    # Путь к вашему CSV файлу
+    file_path = 'sklad_prices.csv'
+    # Загрузить данные из CSV файла в DataFrame, указав dtype для WB Barcode как строка
+    sklad = pd.read_csv(file_path, dtype={'WB Barcode': str})
+    # Определить необходимые столбцы
+    desired_columns = ['YM', 'Модель', 'Наличие', 'WB Barcode']
+    # Отобрать только необходимые столбцы
+    sklad_filtered = sklad.loc[:, desired_columns]
+    # Очистка значений в 'WB Barcode': удаление пробелов и преобразование строк в целые числа, если нужно
+    sklad_filtered['WB Barcode'] = sklad_filtered['WB Barcode'].str.strip()
+    # Фильтровать и очищать строки
+    ym_frame = sklad_filtered[['YM', 'Наличие']].dropna(subset=['Наличие'])
+    ym_frame = ym_frame.dropna(subset=['YM'])
+    ym_frame = ym_frame[ym_frame['YM'].astype(str).str.strip() != '']
+    wb_frame = sklad_filtered[['WB Barcode', 'Наличие']].dropna(subset=['Наличие'])
+    wb_frame = wb_frame.dropna(subset=['WB Barcode'])
+
     wb_final = []
     if not wb_frame.empty:
         for index, row in wb_frame.iterrows():
-            sku = row['WB']
+            sku = row['WB Barcode']
             amount = row['Наличие']
             wb_final.append({"sku": sku, "amount": int(amount)})
 
@@ -49,13 +53,14 @@ def gen_sklad():
     current_time = datetime.now(timezone.utc).isoformat()
     if not ym_frame.empty:
         for index, row in ym_frame.iterrows():
-            sku = str(row['Артикул'])
+            sku = str(row['YM'])
             count = int(row['Наличие'])
             item = {
                 "sku": sku,
                 "items": [{"count": count, "updatedAt": current_time}]
             }
             ym_final.append(item)
+
     return wb_final, ym_final
 
 
