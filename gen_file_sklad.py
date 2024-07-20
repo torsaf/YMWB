@@ -35,7 +35,8 @@ def gen_sklad():
     # Создание нового столбца 'Цена до скидки'
     sklad_filtered['Цена до скидки'] = (np.ceil(sklad_filtered['Цена'] * 1.20 / 100) * 100).astype(int)
     # Удаление строк, если оба поля "YM" и "WB" пустые, или если "Наличие" == 0
-    sklad_filtered = sklad_filtered[~(
-            (sklad_filtered['YM'].str.strip() == '') & (sklad_filtered['WB Barcode'].str.strip() == '') | (
-            sklad_filtered['Наличие'] == '0'))]
+    sklad_filtered = sklad_filtered[~((sklad_filtered['YM'].str.strip() == '') & (sklad_filtered['WB Barcode'].str.strip() == ''))]
     sklad_filtered.to_csv('sklad_prices.csv', index=False)
+
+
+
