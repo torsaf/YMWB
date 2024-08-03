@@ -3,7 +3,7 @@
 - gen_sklad: получает данные о запасах из файла sklad_prices и фильтрует их для дальнейшего обновления.
 - wb_update: обновляет данные о запасах на складе Wildberries.
 - ym_update: обновляет данные о запасах на складе Yandex.Market.
-
+- mm_update: обновляет данные о запасах на складе MegaMarket.
 """
 
 import requests
@@ -12,12 +12,15 @@ from dotenv import load_dotenv
 from datetime import datetime, timezone
 from notifiers import get_notifier
 import pandas as pd
+import json
 import gspread
 
 load_dotenv()
 
 telegram_got_token = os.getenv('telegram_got_token')
 telegram_chat_id = os.getenv('telegram_chat_id')
+telegram_got_token_error = os.getenv('telegram_got_token_error')
+telegram_chat_id_error = os.getenv('telegram_chat_id_error')
 telegram = get_notifier('telegram')
 
 
@@ -28,9 +31,9 @@ def gen_sklad():
     # Путь к вашему CSV файлу
     file_path = 'sklad_prices.csv'
     # Загрузить данные из CSV файла в DataFrame, указав dtype для WB Barcode как строка
-    sklad = pd.read_csv(file_path, dtype={'WB Barcode': str})
+    sklad = pd.read_csv(file_path, dtype={'WB Barcode': str, 'MM': str})
     # Определить необходимые столбцы
-    desired_columns = ['YM', 'Модель', 'Наличие', 'WB Barcode']
+    desired_columns = ['YM', 'MM', 'Модель', 'Наличие', 'WB Barcode']
     # Отобрать только необходимые столбцы
     sklad_filtered = sklad.loc[:, desired_columns]
     # Очистка значений в 'WB Barcode': удаление пробелов и преобразование строк в целые числа, если нужно
@@ -41,6 +44,9 @@ def gen_sklad():
     ym_frame = ym_frame[ym_frame['YM'].astype(str).str.strip() != '']
     wb_frame = sklad_filtered[['WB Barcode', 'Наличие']].dropna(subset=['Наличие'])
     wb_frame = wb_frame.dropna(subset=['WB Barcode'])
+    mm_frame = sklad_filtered[['MM', 'Наличие']].dropna(subset=['Наличие'])
+    mm_frame = mm_frame.dropna(subset=['MM'])
+    mm_frame = mm_frame[mm_frame['MM'].astype(str).str.strip() != '']
 
     wb_final = []
     if not wb_frame.empty:
@@ -61,7 +67,19 @@ def gen_sklad():
             }
             ym_final.append(item)
 
-    return wb_final, ym_final
+    mm_final = []
+    if not mm_frame.empty:
+        for index, row in mm_frame.iterrows():
+            offer_id = str(row['MM'])
+            quantity = int(row['Наличие'])
+            item = {
+                "offerId": offer_id,
+                "quantity": quantity
+            }
+            mm_final.append(item)
+
+    return wb_final, ym_final, mm_final
+
 
 
 def wb_update(wb_data):
@@ -76,7 +94,7 @@ def wb_update(wb_data):
     response = requests.put(url_wb, headers=headers, json=params)
     if response.status_code != 204:
         message = f"😨 Ошибка при обновлении склада WB. Статус-код: {response.status_code}"
-        telegram.notify(token=telegram_got_token, chat_id=telegram_chat_id, message=message)
+        telegram.notify(token=telegram_got_token_error, chat_id=telegram_chat_id_error, message=message)
 
 
 def ym_update(ym_data):
@@ -88,4 +106,29 @@ def ym_update(ym_data):
     response = requests.put(url_ym, headers=headers, json=stock_data)
     if response.status_code != 200:
         message = f"😨 Ошибка при обновлении склада YM. Статус-код: {response.status_code}"
-        telegram.notify(token=telegram_got_token, chat_id=telegram_chat_id, message=message)
+        telegram.notify(token=telegram_got_token_error, chat_id=telegram_chat_id_error, message=message)
+
+
+def mm_update(mm_data):
+    mm_token = os.getenv('mm_token')
+    url_mm = 'https://api.megamarket.tech/api/merchantIntegration/v1/offerService/stock/update'
+    headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+    }
+    payload = {
+        "meta": {},
+        "data": {
+            "token": mm_token,
+            "stocks": mm_data
+        }
+    }
+    # Преобразуем payload в строку JSON
+    payload_json = json.dumps(payload)
+    # Выполняем запрос
+    response = requests.post(url_mm, headers=headers, data=payload_json)
+    if response.status_code != 200:
+        message = f"😨 Ошибка при обновлении склада MM. Статус-код: {response.status_code}"
+        telegram.notify(token=telegram_got_token_error, chat_id=telegram_chat_id_error, message=message)
+
+

@@ -4,6 +4,7 @@
 Функции модуля:
 - get_orders_yandex_market: получает заказы с платформы Yandex.Market, используя API.
 - get_orders_wildberries: получает заказы с платформы Wildberries, используя API.
+- get_orders_megamarket: получает заказы с платформы Megamarket, используя API.
 - write_order_id_to_file: записывает ID заказов в файл для отслеживания уже обработанных заказов.
 - notify_about_new_orders: отправляет уведомления в Telegram о новых заказах с указанных платформ.
 
@@ -11,6 +12,7 @@
 
 import requests
 import os
+import pandas as pd
 from dotenv import load_dotenv
 from notifiers import get_notifier
 import json
@@ -33,7 +35,6 @@ def get_orders_yandex_market():
         "substatus": "STARTED"
     }
     response = requests.get(url_ym, headers=headers, params=params)
-    # print('YM', response.status_code)
     if response.status_code == 200:
         orders_data = response.json().get('orders', [])  # Получаем список заказов из ключа 'orders'
         return orders_data  # Возвращаем список заказов
@@ -47,6 +48,16 @@ def get_orders_wildberries():
     if response.status_code == 200:
         orders = response.json().get('orders', [])
         return orders
+
+def get_orders_megamarket():
+    mm_token = os.getenv('mm_token')
+    url_mm = 'https://api.megamarket.tech/api/market/v1/partnerService/order/new'
+    headers = {"Authorization": f"Bearer {mm_token}"}
+    response = requests.get(url_mm, headers=headers)
+    if response.status_code == 200:
+        orders_data = response.json().get('data', {}).get('shipments', [])
+        return orders_data
+
 
 
 def write_order_id_to_file(order_id, filename):
@@ -75,6 +86,20 @@ def write_order_id_to_file(order_id, filename):
 # Путь к файлу, куда вы хотите записывать ID заказов
 file_path = 'order_ids.txt'
 
+# Функция, которая берет название товара из файла, когда есть заказ с WB
+def get_product(nmId):
+    # Путь к вашему CSV файлу
+    file_path = 'sklad_prices.csv'
+    # Загрузить данные из CSV файла в DataFrame
+    sklad = pd.read_csv(file_path)
+    # Найти строку, где "WB Артикул" соответствует nmId
+    product_row = sklad[sklad['WB Артикул'] == nmId]
+    # Если совпадение найдено, вернуть значение из столбца "Модель"
+    if not product_row.empty:
+        return product_row.iloc[0]['Модель']
+    else:
+        return None
+
 
 def notify_about_new_orders(orders, platform, supplier):
     if not orders:
@@ -92,7 +117,12 @@ def notify_about_new_orders(orders, platform, supplier):
                         message += f"Товар: {item.get('offerName')}\nЦена: {int(item.get('buyerPriceBeforeDiscount'))} р.\n"
                 elif supplier == 'Wildberries':
                     message += f"Артикул: {order.get('article')} \n"
-                    message += f"Цена: {str(order.get('price'))[:-2]} р.\n"
+                    message += f"Товар: {get_product(order.get('nmId'))} \n"
+                    message += f"Цена: {str(order.get('convertedPrice'))[:-2]} р.\n"
+                elif supplier == 'MegaMarket':
+                    for shipment in order.get('shipments', []):
+                        for item in shipment.get('items', []):
+                            message += f"Товар: {item.get('itemName')}\nЦена: {item.get('price')} р.\n"
                 message += '\n'
                 telegram.notify(token=telegram_got_token, chat_id=telegram_chat_id, message=message)
 
@@ -103,3 +133,6 @@ def check_for_new_orders():
 
     orders_wildberries = get_orders_wildberries()
     notify_about_new_orders(orders_wildberries, "Wildberries", "Wildberries")
+
+    orders_megamarket = get_orders_megamarket()
+    notify_about_new_orders(orders_megamarket, "Megamarket", "Megamarket")

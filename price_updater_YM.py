@@ -15,6 +15,8 @@ load_dotenv()
 
 telegram_got_token = os.getenv('telegram_got_token')
 telegram_chat_id = os.getenv('telegram_chat_id')
+telegram_got_token_error = os.getenv('telegram_got_token_error')
+telegram_chat_id_error = os.getenv('telegram_chat_id_error')
 telegram = get_notifier('telegram')
 
 
@@ -29,7 +31,7 @@ def ym_price_update(ym_data):
     response = requests.post(url_ym, headers=headers, json=ym_data)
     if response.status_code != 200:
         message = f"😨 Ошибка при обновлении цен YM. Статус-код: {response.status_code}, Тело ответа: {response.text}"
-        telegram.notify(token=telegram_got_token, chat_id=telegram_chat_id, message=message)
+        telegram.notify(token=telegram_got_token_error, chat_id=telegram_chat_id_error, message=message)
 
 
 def read_sklad_csv(file_path):

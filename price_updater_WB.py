@@ -14,6 +14,8 @@ load_dotenv()
 
 telegram_got_token = os.getenv('telegram_got_token')
 telegram_chat_id = os.getenv('telegram_chat_id')
+telegram_got_token_error = os.getenv('telegram_got_token_error')
+telegram_chat_id_error = os.getenv('telegram_chat_id_error')
 telegram = get_notifier('telegram')
 
 
@@ -31,7 +33,7 @@ def wb_price_update(wb_data):
             pass
         else:
             message = f"😨 Ошибка при обновлении цен WB. Статус-код: {response.status_code}, Тело ответа: {response.text}"
-            telegram.notify(token=telegram_got_token, chat_id=telegram_chat_id, message=message)
+            telegram.notify(token=telegram_got_token_error, chat_id=telegram_chat_id_error, message=message)
 
 
 def load_data(file_path):
