@@ -23,7 +23,7 @@ while true; do
 
     # Запуск Python-скрипта и ограничение времени выполнения до 30 секунд
     echo "Запуск Python скрипта..."
-    timeout 86400 /home/f0429526/python/bin/python main.py
+    timeout 1800 /home/f0429526/python/bin/python main.py
 
     # Проверка успешности выполнения Python-скрипта
     if [ $? -ne 0 ]; then

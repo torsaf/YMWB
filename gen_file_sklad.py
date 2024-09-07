@@ -17,13 +17,16 @@ def gen_sklad():
     data = worksheet.get('A1:T')
     data = [row for row in data if any(cell.strip() for cell in row)]
     data = [[cell.strip() for cell in row] for row in data]
-    filtered_data = [row for row in data[1:] if 'SKL' in row]
+    # filtered_data = [row for row in data[1:] if 'SKL' in row]
+    filtered_data = [row for row in data[1:] if 'SKL' in row or 'UNT' in row]
     columns = data[0]
     data = filtered_data
     sklad = pd.DataFrame(data, columns=columns)
     desired_columns = ['YM', 'MM', 'WB Barcode', 'WB Артикул', 'Статус', 'Модель', 'Наличие', 'Цены YM, WB, MM']
     sklad = sklad.loc[:, desired_columns]
-    sklad_filtered = sklad[sklad['Статус'] == 'На складе']
+    # sklad_filtered = sklad[sklad['Статус'] == 'На складе']
+    sklad_filtered = sklad[sklad['Статус'].isin(['На складе', 'Товар в UM'])]
+
     # Удаление столбца 'Статус'
     sklad_filtered = sklad_filtered.drop(columns=['Статус'])
 

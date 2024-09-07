@@ -114,7 +114,13 @@ def notify_about_new_orders(orders, platform, supplier):
                 message += f"ID заказа: {order.get('id')}\n"
                 if supplier == 'Yandex.Market':
                     for item in order.get('items', []):
-                        message += f"Товар: {item.get('offerName')}\nЦена: {int(item.get('buyerPriceBeforeDiscount'))} р.\n"
+                        # Это цена со всеми скидками
+                        subsidy_amount = next((subsidy.get('amount') for subsidy in item.get('subsidies', []) if
+                                               subsidy.get('type') == 'SUBSIDY'), 0)
+                        # Это цена скидки яндекса, которая плюсуется ниже с ценой со всеми скидками и получаем нужное значение.
+                        price = int(item.get('buyerPrice'))
+                        message += f"Товар: {item.get('offerName')}\nЦена: {int(subsidy_amount + price)} р.\n"
+                        # message += f"Товар: {item.get('offerName')}\nЦена: {item.get('subsidies')} р.\n"
                 elif supplier == 'Wildberries':
                     message += f"Артикул: {order.get('article')} \n"
                     message += f"Товар: {get_product(order.get('nmId'))} \n"
