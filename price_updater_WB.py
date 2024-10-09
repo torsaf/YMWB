@@ -5,6 +5,7 @@
 
 import requests
 import os
+import json
 import pandas as pd
 from dotenv import load_dotenv
 from notifiers import get_notifier
@@ -26,6 +27,7 @@ def wb_price_update(wb_data):
         'Authorization': wb_api_token,
         'Content-Type': 'application/json'
     }
+
     response = requests.post(url_wb, headers=headers, json=wb_data)
     if response.status_code != 200:
         # Исключаем ошибку 400 с текстом "No goods for process"
@@ -56,12 +58,13 @@ def create_wb_data(df):
     return {"data": wb_data_list}
 
 
-if __name__ == "__main__":
-    # Считываем данные из файла sklad_prices.csv
-    df = load_data('sklad_prices.csv')
-
-    # Создаем данные для WB API
-    wb_data = create_wb_data(df)
-
-    # Вызов функции для обновления цен
-    wb_price_update(wb_data)
+# Блок ниже нужен для тестирования, если нужно поработать без основного кода.
+# if __name__ == "__main__":
+#     # Считываем данные из файла sklad_prices.csv
+#     df = load_data('sklad_prices.csv')
+#
+#     # Создаем данные для WB API
+#     wb_data = create_wb_data(df)
+#
+#     # Вызов функции для обновления цен
+#     wb_price_update(wb_data)

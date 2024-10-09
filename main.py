@@ -4,6 +4,7 @@ from order_notifications import check_for_new_orders
 import price_updater_WB as wb_updater
 import price_updater_YM as ym_updater
 import price_updater_MM as mm_updater
+import price_updater_OZ as oz_updater
 import signal
 import time
 import sys
@@ -61,7 +62,7 @@ if __name__ == "__main__":
 
         # Берем данные из CSV и преобразовываем в нужный вид
         try:
-            wb, ym, mm = remainders.gen_sklad()
+            wb, ym, mm, oz = remainders.gen_sklad()
         except Exception as e:
             notify_error("получении данных из файла", e)
             continue  # Пропускаем оставшуюся часть итерации, если данные не получены
@@ -70,6 +71,7 @@ if __name__ == "__main__":
         update_stock(remainders.wb_update, wb)
         update_stock(remainders.ym_update, ym)
         update_stock(remainders.mm_update, mm)
+        update_stock(remainders.oz_update, oz)
 
         # Проверяем наличие новых заказов
         try:
@@ -91,6 +93,7 @@ if __name__ == "__main__":
         # Обновляем цены на MM
         update_prices(mm_updater, 'sklad_prices.csv', mm_updater.mm_price_update)
 
-        time.sleep(60)
+        # Обновляем цены на OZ
+        update_prices(oz_updater, 'sklad_prices.csv', oz_updater.oz_price_update)
 
-
+        time.sleep(130)

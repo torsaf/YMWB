@@ -1,13 +1,8 @@
-"""
-Функции модуля:
-- read_sklad_csv: получает данные о ценах на товары MM из файла sklad.csv.
-- mm_price_update: обновляет цены на MM.
-"""
-
 import os
-import requests
 import csv
+import requests
 import json
+import pandas as pd
 from dotenv import load_dotenv
 from notifiers import get_notifier
 
@@ -21,30 +16,34 @@ telegram_chat_id_error = os.getenv('telegram_chat_id_error')
 telegram = get_notifier('telegram')
 
 
-def mm_price_update(mm_data):
-    mm_token = os.getenv('mm_token')
-    url_mm = 'https://api.megamarket.tech/api/merchantIntegration/v1/offerService/manualPrice/save'
+# Функция для обновления цен на Ozon
+def oz_price_update(oz_data):
+    ozon_client_id = os.getenv('ozon_client_ID')
+    ozon_api_key = os.getenv('ozon_API_key')
+    url_ozon = 'https://api-seller.ozon.ru/v1/product/import/prices'
+
     headers = {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
+        'Client-Id': ozon_client_id,
+        'Api-Key': ozon_api_key,
+        'Content-Type': 'application/json'
     }
+
     payload = {
-        "meta": {},
-        "data": {
-            "token": mm_token,
-            "prices": mm_data
-        }
+        "prices": oz_data
     }
 
     # Логирование отправляемого payload
     # print("Отправляемые данные:", json.dumps(payload, indent=4))
-    # Преобразуем payload в строку JSON
+
+    # Преобразуем payload в строку JSON и выполняем запрос
     payload_json = json.dumps(payload)
-    # Выполняем запрос
-    response = requests.post(url_mm, headers=headers, data=payload_json)
+    response = requests.post(url_ozon, headers=headers, data=payload_json)
+
     if response.status_code != 200:
-        message = f"😨 Ошибка при обновлении цен MM. Статус-код: {response.status_code}, Тело ответа: {response.text}"
+        message = f"😨 Ошибка при обновлении цен Ozon. Статус-код: {response.status_code}, Текст ошибки: {response.text}"
         telegram.notify(token=telegram_got_token_error, chat_id=telegram_chat_id_error, message=message)
+    # else:
+    #     print("Цены успешно обновлены на Ozon!")
 
 
 def read_sklad_csv(file_path):
@@ -52,14 +51,17 @@ def read_sklad_csv(file_path):
     with open(file_path, mode='r', encoding='utf-8') as file:
         reader = csv.DictReader(file)
         for row in reader:
-            if row["MM"].strip():
+            if row["OZ"].strip():
                 offer = {
-                    "offerId": row["MM"],
-                    "price": int(row["Цена"]),
+                    "offer_id": row["OZ"],  # Исправлено на offer_id
+                    "price": str(row["Цена"]),  # Преобразуем в строку
+                    "old_price": str(row["Цена до скидки"]) if row["Цена до скидки"] else "0",  # Если есть скидка
                     "isDeleted": False
                 }
                 mm_data.append(offer)
     return mm_data
+
+
 
 # Блок ниже нужен для тестирования, если нужно поработать без основного кода.
 # if __name__ == "__main__":
@@ -67,7 +69,8 @@ def read_sklad_csv(file_path):
 #     file_path = 'sklad_prices.csv'
 #
 #     # Чтение данных из CSV файла
-#     mm_data = read_sklad_csv(file_path)
+#     oz_data = read_sklad_csv(file_path)
+#     print(oz_data)
 #
 #     # Обновление цен на MegaMarket
-#     mm_price_update(mm_data)
+#     oz_price_update(oz_data)

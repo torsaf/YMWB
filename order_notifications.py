@@ -15,6 +15,7 @@ import os
 import pandas as pd
 from dotenv import load_dotenv
 from notifiers import get_notifier
+from datetime import datetime, timedelta
 import json
 
 load_dotenv()
@@ -58,6 +59,35 @@ def get_orders_megamarket():
         orders_data = response.json().get('data', {}).get('shipments', [])
         return orders_data
 
+
+def get_orders_ozon():
+    url = "https://api-seller.ozon.ru/v3/posting/fbs/unfulfilled/list"
+    headers = {
+        'Client-Id': os.getenv('ozon_client_ID'),
+        'Api-Key': os.getenv('ozon_API_key'),
+        'Content-Type': 'application/json'
+    }
+
+    # Устанавливаем диапазон дат
+    cutoff_from = (datetime.utcnow() - timedelta(days=1)).isoformat() + 'Z'  # 1 день назад
+    cutoff_to = datetime.utcnow().isoformat() + 'Z'  # На текущий день
+
+    payload = {
+        "filter": {
+            "status_alias": ["sent_by_seller"],  # Получаем заказы, отправленные продавцом
+            "cutoff_from": cutoff_from,  # Начало диапазона
+            "cutoff_to": cutoff_to  # Конец диапазона
+        },
+        "limit": 100,  # Максимальное количество возвращаемых заказов
+        "offset": 0  # Начальный индекс
+    }
+
+    response = requests.post(url, headers=headers, json=payload)
+    if response.status_code == 200:
+        return response.json().get("result", {}).get("postings", [])
+    else:
+        print(f"Ошибка при получении заказов с Ozon: {response.status_code}, {response.text}")
+        return []
 
 
 def write_order_id_to_file(order_id, filename):
@@ -129,6 +159,15 @@ def notify_about_new_orders(orders, platform, supplier):
                     for shipment in order.get('shipments', []):
                         for item in shipment.get('items', []):
                             message += f"Товар: {item.get('itemName')}\nЦена: {item.get('price')} р.\n"
+
+
+                elif supplier == 'Ozon':  # Добавляем поддержку Ozon
+                    for product in order.get('products', []):
+                        message += f"Товар: {product['name']}\n"  # Получаем название товара
+                        # Округляем цену до целого числа, чтобы убрать ".0000"
+                        price = int(float(product['price']))
+                        message += f"Цена: {price} р.\n"  # Форматируем цену
+
                 message += '\n'
                 telegram.notify(token=telegram_got_token, chat_id=telegram_chat_id, message=message)
 
@@ -142,3 +181,6 @@ def check_for_new_orders():
 
     orders_megamarket = get_orders_megamarket()
     notify_about_new_orders(orders_megamarket, "Megamarket", "Megamarket")
+
+    orders_ozon = get_orders_ozon()  # Получаем заказы с Ozon
+    notify_about_new_orders(orders_ozon, "Ozon", "Ozon")  # Уведомляем о новых заказах с Ozon

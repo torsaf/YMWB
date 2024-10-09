@@ -51,14 +51,14 @@ def read_sklad_csv(file_path):
                 ym_data["offers"].append(offer)
     return ym_data
 
-
-if __name__ == "__main__":
-    # Путь к файлу sklad_prices.csv
-    file_path = 'sklad_prices.csv'
-
-    # Чтение данных из CSV файла
-    ym_data = read_sklad_csv(file_path)
-
-    # Обновление цен на Yandex Market
-    ym_price_update(ym_data)
+# Блок ниже нужен для тестирования, если нужно поработать без основного кода.
+# if __name__ == "__main__":
+#     # Путь к файлу sklad_prices.csv
+#     file_path = 'sklad_prices.csv'
+#
+#     # Чтение данных из CSV файла
+#     ym_data = read_sklad_csv(file_path)
+#
+#     # Обновление цен на Yandex Market
+#     ym_price_update(ym_data)
 

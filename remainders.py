@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from notifiers import get_notifier
 import pandas as pd
 import json
+import time
 import gspread
 
 load_dotenv()
@@ -33,7 +34,7 @@ def gen_sklad():
     # Загрузить данные из CSV файла в DataFrame, указав dtype для WB Barcode как строка
     sklad = pd.read_csv(file_path, dtype={'WB Barcode': str, 'MM': str})
     # Определить необходимые столбцы
-    desired_columns = ['YM', 'MM', 'Модель', 'Наличие', 'WB Barcode']
+    desired_columns = ['OZ', 'YM', 'MM', 'Модель', 'Наличие', 'WB Barcode']
     # Отобрать только необходимые столбцы
     sklad_filtered = sklad.loc[:, desired_columns]
     # Очистка значений в 'WB Barcode': удаление пробелов и преобразование строк в целые числа, если нужно
@@ -47,6 +48,9 @@ def gen_sklad():
     mm_frame = sklad_filtered[['MM', 'Наличие']].dropna(subset=['Наличие'])
     mm_frame = mm_frame.dropna(subset=['MM'])
     mm_frame = mm_frame[mm_frame['MM'].astype(str).str.strip() != '']
+    oz_frame = sklad_filtered[['OZ', 'Наличие']].dropna(subset=['Наличие'])
+    oz_frame = oz_frame.dropna(subset=['OZ'])
+    oz_frame = oz_frame[oz_frame['OZ'].astype(str).str.strip() != '']
 
     wb_final = []
     if not wb_frame.empty:
@@ -78,8 +82,43 @@ def gen_sklad():
             }
             mm_final.append(item)
 
-    return wb_final, ym_final, mm_final
+    oz_final = []
+    if not oz_frame.empty:
+        for index, row in oz_frame.iterrows():
+            offer_id = str(row['OZ']).rstrip('.0')  # Убираем .0, если оно есть
+            stock = int(row['Наличие'])
+            warehouse_id = 1020002115578000  # Здесь должен быть актуальный идентификатор склада
+            item = {
+                "offer_id": offer_id,
+                "product_id": int(row['OZ']),  # Здесь предполагается, что `YM` - это product_id
+                "stock": stock,
+                "warehouse_id": warehouse_id
+            }
+            oz_final.append(item)
+    return wb_final, ym_final, mm_final, oz_final
 
+
+def oz_update(oz_data):
+    ozon_client_id = os.getenv('ozon_client_ID')
+    ozon_api_key = os.getenv('ozon_API_key')
+    url_ozon = 'https://api-seller.ozon.ru/v2/products/stocks'
+
+    headers = {
+        'Client-Id': ozon_client_id,
+        'Api-Key': ozon_api_key,
+        'Content-Type': 'application/json'
+    }
+
+    # Формируем тело запроса с данными остатков
+    payload = {
+        "stocks": oz_data
+    }
+
+    # Отправляем запрос на обновление остатков
+    response = requests.post(url_ozon, headers=headers, json=payload)
+    if response.status_code != 200:
+        message = f"😨 Ошибка при обновлении склада Ozon. Статус-код: {response.status_code}, Текст ошибки: {response.text}"
+        telegram.notify(token=telegram_got_token_error, chat_id=telegram_chat_id_error, message=message)
 
 
 def wb_update(wb_data):
@@ -130,5 +169,3 @@ def mm_update(mm_data):
     if response.status_code != 200:
         message = f"😨 Ошибка при обновлении склада MM. Статус-код: {response.status_code}"
         telegram.notify(token=telegram_got_token_error, chat_id=telegram_chat_id_error, message=message)
-
-
