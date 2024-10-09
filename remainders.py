@@ -4,6 +4,7 @@
 - wb_update: обновляет данные о запасах на складе Wildberries.
 - ym_update: обновляет данные о запасах на складе Yandex.Market.
 - mm_update: обновляет данные о запасах на складе MegaMarket.
+- oz_update: обновляет данные о запасах на складе Ozon.
 """
 
 import requests
