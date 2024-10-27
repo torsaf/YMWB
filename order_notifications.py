@@ -69,22 +69,24 @@ def get_orders_ozon():
     }
 
     # Устанавливаем диапазон дат
-    cutoff_from = (datetime.utcnow() - timedelta(days=1)).isoformat() + 'Z'  # 1 день назад
-    cutoff_to = datetime.utcnow().isoformat() + 'Z'  # На текущий день
+    cutoff_from = datetime.utcnow().isoformat() + 'Z'  # Сегодня
+    cutoff_to = (datetime.utcnow() + timedelta(days=10)).isoformat() + 'Z'  # Через 10 дней
 
     payload = {
         "filter": {
-            "status_alias": ["sent_by_seller"],  # Получаем заказы, отправленные продавцом
+            "status_alias": ["awaiting_packaging", "awaiting_deliver"],  # Только новые заказы
             "cutoff_from": cutoff_from,  # Начало диапазона
             "cutoff_to": cutoff_to  # Конец диапазона
         },
         "limit": 100,  # Максимальное количество возвращаемых заказов
         "offset": 0  # Начальный индекс
     }
-
     response = requests.post(url, headers=headers, json=payload)
     if response.status_code == 200:
-        return response.json().get("result", {}).get("postings", [])
+        # Фильтруем заказы с нужным статусом 'awaiting_packaging'
+        orders = response.json().get("result", {}).get("postings", [])
+        filtered_orders = [order for order in orders if order.get("status") == "awaiting_packaging"]
+        return filtered_orders
     else:
         print(f"Ошибка при получении заказов с Ozon: {response.status_code}, {response.text}")
         return []
@@ -139,9 +141,11 @@ def notify_about_new_orders(orders, platform, supplier):
     else:
         for order in orders:
             # Запись ID заказа в файл перед добавлением товаров в сообщение
-            if write_order_id_to_file(order.get('id'), file_path):
+            order_id = order.get('posting_number') if supplier == 'Ozon' else order.get('id')
+            # Запись ID заказа в файл перед добавлением товаров в сообщение
+            if write_order_id_to_file(order_id, file_path):
                 message = f"📦 Новый заказ на {platform}:\n\n"
-                message += f"ID заказа: {order.get('id')}\n"
+                message += f"ID заказа: {order_id}\n"
                 if supplier == 'Yandex.Market':
                     for item in order.get('items', []):
                         # Это цена со всеми скидками
@@ -173,14 +177,17 @@ def notify_about_new_orders(orders, platform, supplier):
 
 
 def check_for_new_orders():
-    orders_yandex_market = get_orders_yandex_market()
-    notify_about_new_orders(orders_yandex_market, "Yandex.Market", "Yandex.Market")
-
-    orders_wildberries = get_orders_wildberries()
-    notify_about_new_orders(orders_wildberries, "Wildberries", "Wildberries")
-
-    orders_megamarket = get_orders_megamarket()
-    notify_about_new_orders(orders_megamarket, "Megamarket", "Megamarket")
+    # orders_yandex_market = get_orders_yandex_market()
+    # notify_about_new_orders(orders_yandex_market, "Yandex.Market", "Yandex.Market")
+    #
+    # orders_wildberries = get_orders_wildberries()
+    # notify_about_new_orders(orders_wildberries, "Wildberries", "Wildberries")
+    #
+    # orders_megamarket = get_orders_megamarket()
+    # notify_about_new_orders(orders_megamarket, "Megamarket", "Megamarket")
 
     orders_ozon = get_orders_ozon()  # Получаем заказы с Ozon
     notify_about_new_orders(orders_ozon, "Ozon", "Ozon")  # Уведомляем о новых заказах с Ozon
+
+
+check_for_new_orders()
