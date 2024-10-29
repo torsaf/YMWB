@@ -1,9 +1,3 @@
-"""
-Функции модуля:
-- oz_price_update: обновляет данные о ценах на OZON.
-"""
-
-
 import os
 import csv
 import requests

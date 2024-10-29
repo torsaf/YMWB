@@ -177,14 +177,14 @@ def notify_about_new_orders(orders, platform, supplier):
 
 
 def check_for_new_orders():
-    # orders_yandex_market = get_orders_yandex_market()
-    # notify_about_new_orders(orders_yandex_market, "Yandex.Market", "Yandex.Market")
-    #
-    # orders_wildberries = get_orders_wildberries()
-    # notify_about_new_orders(orders_wildberries, "Wildberries", "Wildberries")
-    #
-    # orders_megamarket = get_orders_megamarket()
-    # notify_about_new_orders(orders_megamarket, "Megamarket", "Megamarket")
+    orders_yandex_market = get_orders_yandex_market()
+    notify_about_new_orders(orders_yandex_market, "Yandex.Market", "Yandex.Market")
+
+    orders_wildberries = get_orders_wildberries()
+    notify_about_new_orders(orders_wildberries, "Wildberries", "Wildberries")
+
+    orders_megamarket = get_orders_megamarket()
+    notify_about_new_orders(orders_megamarket, "Megamarket", "Megamarket")
 
     orders_ozon = get_orders_ozon()  # Получаем заказы с Ozon
     notify_about_new_orders(orders_ozon, "Ozon", "Ozon")  # Уведомляем о новых заказах с Ozon

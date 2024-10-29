@@ -81,19 +81,19 @@ if __name__ == "__main__":
 
         # Обновляем цены на WB
         try:
-            df = wb_updater.load_data('sklad_prices.csv')
+            df = wb_updater.load_data('sklad_prices_wildberries.csv')
             wb_data = wb_updater.create_wb_data(df)
             wb_updater.wb_price_update(wb_data)
         except Exception as e:
             notify_error("обновлении цен в Wildberries", e)
 
         # Обновляем цены на YM
-        update_prices(ym_updater, 'sklad_prices.csv', ym_updater.ym_price_update)
+        update_prices(ym_updater, 'sklad_prices_yandex.csv', ym_updater.ym_price_update)
 
         # Обновляем цены на MM
-        update_prices(mm_updater, 'sklad_prices.csv', mm_updater.mm_price_update)
+        update_prices(mm_updater, 'sklad_prices_megamarket.csv', mm_updater.mm_price_update)
 
         # Обновляем цены на OZ
-        update_prices(oz_updater, 'sklad_prices.csv', oz_updater.oz_price_update)
+        update_prices(oz_updater, 'sklad_prices_ozon.csv', oz_updater.oz_price_update)
 
         time.sleep(130)

@@ -4,7 +4,6 @@
 - wb_update: обновляет данные о запасах на складе Wildberries.
 - ym_update: обновляет данные о запасах на складе Yandex.Market.
 - mm_update: обновляет данные о запасах на складе MegaMarket.
-- oz_update: обновляет данные о запасах на складе Ozon.
 """
 
 import requests
@@ -27,75 +26,60 @@ telegram = get_notifier('telegram')
 
 
 def gen_sklad():
-    # Установить параметры pandas для полного вывода всех столбцов
-    pd.set_option('display.max_columns', None)  # отображать все столбцы
-    pd.set_option('display.width', 1000)  # установить ширину вывода
-    # Путь к вашему CSV файлу
-    file_path = 'sklad_prices.csv'
-    # Загрузить данные из CSV файла в DataFrame, указав dtype для WB Barcode как строка
-    sklad = pd.read_csv(file_path, dtype={'WB Barcode': str, 'MM': str})
-    # Определить необходимые столбцы
-    desired_columns = ['OZ', 'YM', 'MM', 'Модель', 'Наличие', 'WB Barcode']
-    # Отобрать только необходимые столбцы
-    sklad_filtered = sklad.loc[:, desired_columns]
-    # Очистка значений в 'WB Barcode': удаление пробелов и преобразование строк в целые числа, если нужно
-    sklad_filtered['WB Barcode'] = sklad_filtered['WB Barcode'].str.strip()
-    # Фильтровать и очищать строки
-    ym_frame = sklad_filtered[['YM', 'Наличие']].dropna(subset=['Наличие'])
-    ym_frame = ym_frame.dropna(subset=['YM'])
-    ym_frame = ym_frame[ym_frame['YM'].astype(str).str.strip() != '']
-    wb_frame = sklad_filtered[['WB Barcode', 'Наличие']].dropna(subset=['Наличие'])
-    wb_frame = wb_frame.dropna(subset=['WB Barcode'])
-    mm_frame = sklad_filtered[['MM', 'Наличие']].dropna(subset=['Наличие'])
-    mm_frame = mm_frame.dropna(subset=['MM'])
-    mm_frame = mm_frame[mm_frame['MM'].astype(str).str.strip() != '']
-    oz_frame = sklad_filtered[['OZ', 'Наличие']].dropna(subset=['Наличие'])
-    oz_frame = oz_frame.dropna(subset=['OZ'])
-    oz_frame = oz_frame[oz_frame['OZ'].astype(str).str.strip() != '']
+    # Параметры pandas для отображения всех столбцов
+    pd.set_option('display.max_columns', None)
+    pd.set_option('display.width', 1000)
 
-    wb_final = []
-    if not wb_frame.empty:
-        for index, row in wb_frame.iterrows():
-            sku = row['WB Barcode']
-            amount = row['Наличие']
-            wb_final.append({"sku": sku, "amount": int(amount)})
+    # Чтение и обработка файла Wildberries
+    wb_file = 'sklad_prices_wildberries.csv'
+    wb_data = pd.read_csv(wb_file, dtype={'WB Barcode': str})
+    wb_data['WB Barcode'] = wb_data['WB Barcode'].str.strip()
+    wb_data = wb_data.dropna(subset=['WB Barcode', 'Наличие'])
+    wb_final = [{"sku": row['WB Barcode'], "amount": int(row['Наличие'])} for _, row in wb_data.iterrows()]
 
-    ym_final = []
+    # Чтение и обработка файла Yandex
+    ym_file = 'sklad_prices_yandex.csv'
+    ym_data = pd.read_csv(ym_file, dtype={'YM': str})
+    ym_data['YM'] = ym_data['YM'].str.strip()
+    ym_data = ym_data.dropna(subset=['YM', 'Наличие'])
     current_time = datetime.now(timezone.utc).isoformat()
-    if not ym_frame.empty:
-        for index, row in ym_frame.iterrows():
-            sku = str(row['YM'])
-            count = int(row['Наличие'])
-            item = {
-                "sku": sku,
-                "items": [{"count": count, "updatedAt": current_time}]
-            }
-            ym_final.append(item)
+    ym_final = [
+        {
+            "sku": str(row['YM']),
+            "items": [{"count": int(row['Наличие']), "updatedAt": current_time}]
+        }
+        for _, row in ym_data.iterrows()
+    ]
 
-    mm_final = []
-    if not mm_frame.empty:
-        for index, row in mm_frame.iterrows():
-            offer_id = str(row['MM'])
-            quantity = int(row['Наличие'])
-            item = {
-                "offerId": offer_id,
-                "quantity": quantity
-            }
-            mm_final.append(item)
+    # Чтение и обработка файла Megamarket
+    mm_file = 'sklad_prices_megamarket.csv'
+    mm_data = pd.read_csv(mm_file, dtype={'MM': str})
+    mm_data['MM'] = mm_data['MM'].str.strip()
+    mm_data = mm_data.dropna(subset=['MM', 'Наличие'])
+    mm_final = [
+        {
+            "offerId": str(row['MM']),
+            "quantity": int(row['Наличие'])
+        }
+        for _, row in mm_data.iterrows()
+    ]
 
-    oz_final = []
-    if not oz_frame.empty:
-        for index, row in oz_frame.iterrows():
-            offer_id = str(row['OZ']).rstrip('.0')  # Убираем .0, если оно есть
-            stock = int(row['Наличие'])
-            warehouse_id = 1020002115578000  # Здесь должен быть актуальный идентификатор склада
-            item = {
-                "offer_id": offer_id,
-                "product_id": int(row['OZ']),  # Здесь предполагается, что `YM` - это product_id
-                "stock": stock,
-                "warehouse_id": warehouse_id
-            }
-            oz_final.append(item)
+    # Чтение и обработка файла Ozon
+    oz_file = 'sklad_prices_ozon.csv'
+    oz_data = pd.read_csv(oz_file, dtype={'OZ': str})
+    oz_data['OZ'] = oz_data['OZ'].str.strip().str.rstrip('.0')
+    oz_data = oz_data.dropna(subset=['OZ', 'Наличие'])
+    warehouse_id = 1020002115578000  # Здесь должен быть актуальный идентификатор склада
+    oz_final = [
+        {
+            "offer_id": str(row['OZ']),
+            "product_id": int(row['OZ']),  # Здесь предполагается, что `OZ` также является product_id
+            "stock": int(row['Наличие']),
+            "warehouse_id": warehouse_id
+        }
+        for _, row in oz_data.iterrows()
+    ]
+
     return wb_final, ym_final, mm_final, oz_final
 
 
