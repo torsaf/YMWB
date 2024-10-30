@@ -121,7 +121,7 @@ file_path = 'order_ids.txt'
 # Функция, которая берет название товара из файла, когда есть заказ с WB
 def get_product(nmId):
     # Путь к вашему CSV файлу
-    file_path = 'sklad_prices.csv'
+    file_path = 'sklad_prices_wildberries.csv'
     # Загрузить данные из CSV файла в DataFrame
     sklad = pd.read_csv(file_path)
     # Найти строку, где "WB Артикул" соответствует nmId
