@@ -10,7 +10,7 @@ def gen_sklad():
     sh = gc.open("КАЗНА")
     worksheet_name = "СКЛАД"
     worksheet = sh.worksheet(worksheet_name)
-    data = worksheet.get('A1:AG')
+    data = worksheet.get('A:AL')
     data = [row for row in data if any(cell.strip() for cell in row)]
     data = [[cell.strip() for cell in row] for row in data]
     filtered_data = [row for row in data[1:] if 'SKL' in row or 'UNT' in row]
@@ -56,5 +56,4 @@ def gen_sklad():
         filename = f'sklad_prices_{marketplace}.csv'
         sklad_filtered.to_csv(filename, index=False)
         # print(f"Файл для {marketplace} сохранен: {filename}")
-
 
