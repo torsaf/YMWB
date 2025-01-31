@@ -10,7 +10,7 @@ def gen_sklad():
     sh = gc.open("КАЗНА")
     worksheet_name = "СКЛАД"
     worksheet = sh.worksheet(worksheet_name)
-    data = worksheet.get('A:AL')
+    data = worksheet.get('A:AM')
     data = [row for row in data if any(cell.strip() for cell in row)]
     data = [[cell.strip() for cell in row] for row in data]
     filtered_data = [row for row in data[1:] if 'SKL' in row or 'UNT' in row]
