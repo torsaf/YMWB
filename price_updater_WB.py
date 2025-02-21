@@ -20,6 +20,24 @@ telegram_chat_id_error = os.getenv('telegram_chat_id_error')
 telegram = get_notifier('telegram')
 
 
+# def wb_price_update(wb_data):
+#     print(wb_data)
+#     wb_api_token = os.getenv('wb_token')
+#     url_wb = 'https://discounts-prices-api.wildberries.ru/api/v2/upload/task'
+#     headers = {
+#         'Authorization': wb_api_token,
+#         'Content-Type': 'application/json'
+#     }
+#
+#     response = requests.post(url_wb, headers=headers, json=wb_data)
+#     if response.status_code != 200:
+#         # Исключаем ошибку 400 с текстом "No goods for process"
+#         if response.status_code == 400 and "No goods for process" in response.json().get('errorText', ''):
+#             pass
+#         else:
+#             message = f"😨 Ошибка при обновлении цен WB. Статус-код: {response.status_code}, Тело ответа: {response.text}"
+#             telegram.notify(token=telegram_got_token_error, chat_id=telegram_chat_id_error, message=message)
+
 def wb_price_update(wb_data):
     wb_api_token = os.getenv('wb_token')
     url_wb = 'https://discounts-prices-api.wildberries.ru/api/v2/upload/task'
@@ -29,13 +47,22 @@ def wb_price_update(wb_data):
     }
 
     response = requests.post(url_wb, headers=headers, json=wb_data)
+
     if response.status_code != 200:
-        # Исключаем ошибку 400 с текстом "No goods for process"
-        if response.status_code == 400 and "No goods for process" in response.json().get('errorText', ''):
-            pass
-        else:
-            message = f"😨 Ошибка при обновлении цен WB. Статус-код: {response.status_code}, Тело ответа: {response.text}"
-            telegram.notify(token=telegram_got_token_error, chat_id=telegram_chat_id_error, message=message)
+        # Исключаем логические ошибки 208 и определённые случаи 400
+        error_text = response.json().get('errorText', '')
+        if response.status_code == 208:
+            return
+        elif response.status_code == 400:
+            if "No goods for process" in error_text:
+                return
+            elif "specified prices and discounts are already set" in error_text.lower():  # Приводим к нижнему регистру
+                return
+        # Если ошибка критическая, отправляем уведомление
+        message = f"😨 Ошибка при обновлении цен WB. Статус-код: {response.status_code}, Тело ответа: {response.text}"
+        telegram.notify(token=telegram_got_token_error, chat_id=telegram_chat_id_error, message=message)
+
+
 
 
 def load_data(file_path):

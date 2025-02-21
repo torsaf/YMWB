@@ -67,7 +67,7 @@ def gen_sklad():
     # Чтение и обработка файла Ozon
     oz_file = 'sklad_prices_ozon.csv'
     oz_data = pd.read_csv(oz_file, dtype={'OZ': str})
-    oz_data['OZ'] = oz_data['OZ'].str.strip().str.rstrip('.0')
+    # oz_data['OZ'] = oz_data['OZ'].str.strip().str.rstrip('.0')
     oz_data = oz_data.dropna(subset=['OZ', 'Наличие'])
     warehouse_id = 1020002115578000  # Здесь должен быть актуальный идентификатор склада
     oz_final = [
@@ -99,6 +99,10 @@ def oz_update(oz_data):
         "stocks": oz_data
     }
 
+    # Логируем данные перед отправкой
+    # print("Отправляемые данные на Ozon:")
+    # print(json.dumps(payload, indent=4, ensure_ascii=False))
+
     # Отправляем запрос на обновление остатков
     response = requests.post(url_ozon, headers=headers, json=payload)
     if response.status_code != 200:
@@ -109,7 +113,8 @@ def oz_update(oz_data):
 def wb_update(wb_data):
     wb_api_token = os.getenv('wb_token')
     warehouse_id = int(os.getenv('warehouseId'))
-    url_wb = f'https://suppliers-api.wildberries.ru/api/v3/stocks/{warehouse_id}'
+    # url_wb = f'https://suppliers-api.wildberries.ru/api/v3/stocks/{warehouse_id}'
+    url_wb = f'https://marketplace-api.wildberries.ru/api/v3/stocks/{warehouse_id}'
     headers = {
         'Authorization': wb_api_token,
         'stocks': 'application/json'
