@@ -110,76 +110,6 @@ def update_stock(articul):
         worksheet.update(values=updated_data, range_name='A2:H')
 
 
-# def update_stock(articul):
-#     # Устанавливаем настройки отображения DataFrame
-#     pd.set_option('display.max_columns', None)
-#     pd.set_option('display.expand_frame_repr', False)
-#
-#     # Подключаемся к Google Sheets
-#     gc = gspread.service_account(filename='my-python-397519-3688db4697d6.json')
-#     sh = gc.open("КАЗНА")
-#     worksheet_name = "СКЛАД"
-#     worksheet = sh.worksheet(worksheet_name)
-#
-#     # Загружаем данные из таблицы
-#     data = worksheet.get('A:H')
-#     data = [row for row in data if any(cell.strip() for cell in row)]
-#     data = [[cell.strip() for cell in row] for row in data]
-#
-#     # Фильтруем строки, где статус "На складе"
-#     filtered_data = [row for row in data[1:] if 'На складе' in row]
-#     columns = data[0]
-#     data = filtered_data
-#
-#     # Создаём DataFrame
-#     sklad = pd.DataFrame(data, columns=columns)
-#
-#     # Ищем строку по артикулу
-#     if 'Арт мой' in sklad.columns and 'Наличие' in sklad.columns:
-#         sklad['Наличие'] = sklad['Наличие'].astype(int)  # Преобразуем столбец "Наличие" в числовой
-#         matched_rows = sklad[sklad['Арт мой'] == articul]
-#
-#         if not matched_rows.empty:
-#             row_index = matched_rows.index[0]  # Получаем индекс первой совпавшей строки
-#             previous_quantity = sklad.at[row_index, 'Наличие']  # Сохраняем начальное значение
-#             sklad.at[row_index, 'Наличие'] -= 1  # Уменьшаем остаток на 1
-#             updated_quantity = sklad.at[row_index, 'Наличие']  # Получаем обновлённое значение
-#             product_name = sklad.at[row_index, 'Модель']  # Название товара
-#
-#             # Формируем красивое сообщение
-#             message = (
-#                 f"✅ Бот вычел со склада\n\n"
-#                 f"Товар: \"{product_name}\"\n"
-#                 f"Артикул: {articul}\n"
-#                 f"Было: {previous_quantity}, стало: {updated_quantity}."
-#             )
-#
-#             # Отправляем сообщение в Telegram
-#             telegram.notify(token=telegram_got_token, chat_id=telegram_chat_id, message=message)
-#
-#
-#             # # # Обновляем данные обратно в Google Sheets
-#             # updated_data = sklad.values.tolist()
-#             # worksheet.update(range_name='A2', values=updated_data) # Обновляем данные начиная со второй строки
-#
-#             # Преобразуем DataFrame обратно в список списков
-#             updated_data = sklad.values.tolist()
-#
-#             # Убираем апострофы для столбцов "Арт UM" и "Арт мой"
-#             for row in updated_data:
-#                 # Преобразуем значения в столбцах "Арт UM" и "Арт мой" в числа, если это возможно
-#                 row[columns.index('Арт UM')] = int(row[columns.index('Арт UM')]) if row[
-#                     columns.index('Арт UM')].isdigit() else row[columns.index('Арт UM')]
-#                 row[columns.index('Арт мой')] = int(row[columns.index('Арт мой')]) if row[
-#                     columns.index('Арт мой')].isdigit() else row[columns.index('Арт мой')]
-#
-#             # Обновляем данные обратно в Google Sheets
-#             # worksheet.update('A2:H', updated_data)  # Обновляем данные начиная со второй строки
-#             worksheet.update(values=updated_data, range_name='A2:H')
-
-
-
-
 def get_orders_yandex_market():
     campaign_id = os.getenv('campaign_id')
     ym_token = os.getenv('ym_token')
@@ -190,7 +120,7 @@ def get_orders_yandex_market():
         "status": "PROCESSING",
         "substatus": "STARTED"
     }
-    response = requests.get(url_ym, headers=headers, params=params)
+    response = requests.get(url_ym, headers=headers, params=params, timeout=10)
     if response.status_code == 200:
         orders_data = response.json().get('orders', [])  # Получаем список заказов из ключа 'orders'
         return orders_data  # Возвращаем список заказов
@@ -201,7 +131,7 @@ def get_orders_wildberries():
     url = 'https://suppliers-api.wildberries.ru/api/v3/orders/new'
     # url = 'https://content-api-sandbox.wildberries.ru/api/v3/orders/new'
     headers = {'Authorization': wb_api_token}
-    response = requests.get(url, headers=headers)
+    response = requests.get(url, headers=headers, timeout=10)
     if response.status_code == 200:
         orders = response.json().get('orders', [])
         return orders
@@ -211,7 +141,7 @@ def get_orders_megamarket():
     mm_token = os.getenv('mm_token')
     url_mm = 'https://api.megamarket.tech/api/market/v1/partnerService/order/new'
     headers = {"Authorization": f"Bearer {mm_token}"}
-    response = requests.get(url_mm, headers=headers)
+    response = requests.get(url_mm, headers=headers, timeout=10)
     if response.status_code == 200:
         orders_data = response.json().get('data', {}).get('shipments', [])
         return orders_data
@@ -250,7 +180,7 @@ def get_orders_ozon():
             "translit": True         # Включить транслитерацию
         }
     }
-    response = requests.post(url, headers=headers, json=payload)
+    response = requests.post(url, headers=headers, json=payload, timeout=10)
     if response.status_code == 200:
         # Фильтруем заказы с нужным статусом 'awaiting_packaging'
         orders = response.json().get("result", {}).get("postings", [])
@@ -259,41 +189,6 @@ def get_orders_ozon():
     else:
         print(f"Ошибка при получении заказов с Ozon: {response.status_code}, {response.text}")
         return []
-
-
-
-# def get_orders_ozon():
-#     url = "https://api-seller.ozon.ru/v3/posting/fbs/unfulfilled/list"
-#     headers = {
-#         'Client-Id': os.getenv('ozon_client_ID'),
-#         'Api-Key': os.getenv('ozon_API_key'),
-#         'Content-Type': 'application/json'
-#     }
-#
-#     # Устанавливаем диапазон дат
-#     cutoff_from = datetime.utcnow().isoformat() + 'Z'  # Сегодня
-#     cutoff_to = (datetime.utcnow() + timedelta(days=10)).isoformat() + 'Z'  # Через 10 дней
-#
-#     payload = {
-#         "filter": {
-#             "status_alias": ["awaiting_packaging", "awaiting_deliver"],  # Только новые заказы
-#             "cutoff_from": cutoff_from,  # Начало диапазона
-#             "cutoff_to": cutoff_to  # Конец диапазона
-#         },
-#         "limit": 100,  # Максимальное количество возвращаемых заказов
-#         "offset": 0  # Начальный индекс
-#     }
-#     response = requests.post(url, headers=headers, json=payload)
-#     if response.status_code == 200:
-#         print(response.status_code)
-#         print(response.json())
-#         # Фильтруем заказы с нужным статусом 'awaiting_packaging'
-#         orders = response.json().get("result", {}).get("postings", [])
-#         filtered_orders = [order for order in orders if order.get("status") == "awaiting_packaging"]
-#         return filtered_orders
-#     else:
-#         print(f"Ошибка при получении заказов с Ozon: {response.status_code}, {response.text}")
-#         return []
 
 
 def write_order_id_to_file(order_id, filename):
@@ -403,7 +298,6 @@ def notify_about_new_orders(orders, platform, supplier):
                         price = int(float(product['price']))
                         message += f"Цена: {price} р.\n"  # Форматируем цену
                         message_minus_odin = product.get('offer_id')
-                        print(message_minus_odin)
 
 
                 message += '\n'

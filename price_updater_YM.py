@@ -28,7 +28,7 @@ def ym_price_update(ym_data):
         "Authorization": f"Bearer {ym_token}",
         "Content-Type": "application/json"
     }
-    response = requests.post(url_ym, headers=headers, json=ym_data)
+    response = requests.post(url_ym, headers=headers, json=ym_data, timeout=10)
     if response.status_code != 200:
         message = f"😨 Ошибка при обновлении цен YM. Статус-код: {response.status_code}, Тело ответа: {response.text}"
         telegram.notify(token=telegram_got_token_error, chat_id=telegram_chat_id_error, message=message)

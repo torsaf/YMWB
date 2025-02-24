@@ -96,4 +96,4 @@ if __name__ == "__main__":
         # Обновляем цены на OZ
         update_prices(oz_updater, 'sklad_prices_ozon.csv', oz_updater.oz_price_update)
 
-        time.sleep(130)
+        time.sleep(400)

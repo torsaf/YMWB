@@ -41,7 +41,7 @@ def mm_price_update(mm_data):
     # Преобразуем payload в строку JSON
     payload_json = json.dumps(payload)
     # Выполняем запрос
-    response = requests.post(url_mm, headers=headers, data=payload_json)
+    response = requests.post(url_mm, headers=headers, data=payload_json, timeout=10)
     if response.status_code != 200:
         message = f"😨 Ошибка при обновлении цен MM. Статус-код: {response.status_code}, Тело ответа: {response.text}"
         telegram.notify(token=telegram_got_token_error, chat_id=telegram_chat_id_error, message=message)

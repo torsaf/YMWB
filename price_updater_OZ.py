@@ -37,13 +37,11 @@ def oz_price_update(oz_data):
 
     # Преобразуем payload в строку JSON и выполняем запрос
     payload_json = json.dumps(payload)
-    response = requests.post(url_ozon, headers=headers, data=payload_json)
-
+    response = requests.post(url_ozon, headers=headers, data=payload_json, timeout=10)
     if response.status_code != 200:
         message = f"😨 Ошибка при обновлении цен Ozon. Статус-код: {response.status_code}, Текст ошибки: {response.text}"
         telegram.notify(token=telegram_got_token_error, chat_id=telegram_chat_id_error, message=message)
-    # else:
-    #     print("Цены успешно обновлены на Ozon!")
+
 
 
 def read_sklad_csv(file_path):
@@ -63,10 +61,10 @@ def read_sklad_csv(file_path):
 
 
 
-# Блок ниже нужен для тестирования, если нужно поработать без основного кода.
+# # Блок ниже нужен для тестирования, если нужно поработать без основного кода.
 # if __name__ == "__main__":
 #     # Путь к файлу sklad_prices.csv
-#     file_path = 'sklad_prices.csv'
+#     file_path = 'sklad_prices_ozon.csv'
 #
 #     # Чтение данных из CSV файла
 #     oz_data = read_sklad_csv(file_path)

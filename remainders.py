@@ -104,7 +104,7 @@ def oz_update(oz_data):
     # print(json.dumps(payload, indent=4, ensure_ascii=False))
 
     # Отправляем запрос на обновление остатков
-    response = requests.post(url_ozon, headers=headers, json=payload)
+    response = requests.post(url_ozon, headers=headers, json=payload, timeout=10)
     if response.status_code != 200:
         message = f"😨 Ошибка при обновлении склада Ozon. Статус-код: {response.status_code}, Текст ошибки: {response.text}"
         telegram.notify(token=telegram_got_token_error, chat_id=telegram_chat_id_error, message=message)
@@ -120,7 +120,7 @@ def wb_update(wb_data):
         'stocks': 'application/json'
     }
     params = {'warehouseId': warehouse_id, 'stocks': wb_data}
-    response = requests.put(url_wb, headers=headers, json=params)
+    response = requests.put(url_wb, headers=headers, json=params, timeout=10)
     if response.status_code != 204:
         message = f"😨 Ошибка при обновлении склада WB. Статус-код: {response.status_code}"
         telegram.notify(token=telegram_got_token_error, chat_id=telegram_chat_id_error, message=message)
@@ -132,7 +132,7 @@ def ym_update(ym_data):
     url_ym = f'https://api.partner.market.yandex.ru/campaigns/{campaign_id}/offers/stocks'
     headers = {"Authorization": f"Bearer {ym_token}"}
     stock_data = {"skus": ym_data}
-    response = requests.put(url_ym, headers=headers, json=stock_data)
+    response = requests.put(url_ym, headers=headers, json=stock_data, timeout=10)
     if response.status_code != 200:
         message = f"😨 Ошибка при обновлении склада YM. Статус-код: {response.status_code}"
         telegram.notify(token=telegram_got_token_error, chat_id=telegram_chat_id_error, message=message)
@@ -155,7 +155,7 @@ def mm_update(mm_data):
     # Преобразуем payload в строку JSON
     payload_json = json.dumps(payload)
     # Выполняем запрос
-    response = requests.post(url_mm, headers=headers, data=payload_json)
+    response = requests.post(url_mm, headers=headers, data=payload_json, timeout=10)
     if response.status_code != 200:
         message = f"😨 Ошибка при обновлении склада MM. Статус-код: {response.status_code}"
         telegram.notify(token=telegram_got_token_error, chat_id=telegram_chat_id_error, message=message)
