@@ -128,8 +128,7 @@ def get_orders_yandex_market():
 
 def get_orders_wildberries():
     wb_api_token = os.getenv('wb_token')
-    url = 'https://suppliers-api.wildberries.ru/api/v3/orders/new'
-    # url = 'https://content-api-sandbox.wildberries.ru/api/v3/orders/new'
+    url = 'https://marketplace-api.wildberries.ru/api/v3/orders/new'
     headers = {'Authorization': wb_api_token}
     response = requests.get(url, headers=headers, timeout=10)
     if response.status_code == 200:
@@ -159,7 +158,7 @@ def get_orders_ozon():
 
     # Устанавливаем диапазон времени за последний год
     cutoff_from = (datetime.utcnow() - timedelta(days=365)).isoformat() + "Z"  # Год назад
-    cutoff_to = datetime.utcnow().isoformat() + "Z"  # Сегодня
+    cutoff_to = (datetime.utcnow() + timedelta(days=20)).isoformat() + "Z"
 
     payload = {
         "dir": "ASC",  # Сортировка по возрастанию
@@ -302,13 +301,11 @@ def notify_about_new_orders(orders, platform, supplier):
 
                 message += '\n'
                 telegram.notify(token=telegram_got_token, chat_id=telegram_chat_id, message=message, parse_mode='markdown')
-                time.sleep(5)
                 # Затем вычитаем товар со склада
                 if message_minus_odin:  # Если товар определён
                     update_stock(message_minus_odin)
                 message1 = '📦'
                 telegram.notify(token=telegram_got_token, chat_id=telegram_chat_id, message=message1)
-                time.sleep(5)
 
 
 def check_for_new_orders():
@@ -318,8 +315,8 @@ def check_for_new_orders():
     orders_wildberries = get_orders_wildberries()
     notify_about_new_orders(orders_wildberries, "Wildberries", "Wildberries")
 
-    orders_megamarket = get_orders_megamarket()
-    notify_about_new_orders(orders_megamarket, "Megamarket", "Megamarket")
+    # orders_megamarket = get_orders_megamarket()
+    # notify_about_new_orders(orders_megamarket, "Megamarket", "Megamarket")
 
     orders_ozon = get_orders_ozon()  # Получаем заказы с Ozon
     notify_about_new_orders(orders_ozon, "Ozon", "Ozon")  # Уведомляем о новых заказах с Ozon
