@@ -1,100 +1,104 @@
-import remainders
-import gen_file_sklad
-from order_notifications import check_for_new_orders
-import price_updater_WB as wb_updater
-import price_updater_YM as ym_updater
-import price_updater_MM as mm_updater
-import price_updater_OZ as oz_updater
-import signal
-import time
 import os
-import sys
 
-# Принудительно переходим в рабочую директорию скрипта
+import sys
+import signal
+from pathlib import Path
+from stock import gen_sklad, wb_update, ym_update, oz_update
+from order_notifications import check_for_new_orders
+from price_updater_master import update_all_prices
+import stock
+from dotenv import load_dotenv
+from pathlib import Path
+load_dotenv(dotenv_path=Path(__file__).parent / "System" / ".env")
+from loguru import logger
+
+
+# 📦 Переход в директорию проекта
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
-def send_telegram_message(message):
-    remainders.telegram.notify(token=remainders.telegram_got_token_error, chat_id=remainders.telegram_chat_id_error,
-                               message=message)
+# 📝 ЛОГИРОВАНИЕ
+LOG_DIR = Path("System/logs")
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+logger.remove()
+logger.add(
+    LOG_DIR / "app_{time:YYYY-MM-DD}.log",
+    rotation="5 MB",
+    retention="7 days",
+    compression="zip",
+    encoding="utf-8",
+    enqueue=True,
+    backtrace=True,
+    diagnose=True,
+    level="DEBUG"
+)
 
 
-# Обработчик сигнала для корректного завершения программы
+# 📬 Телеграм-уведомление
+def send_telegram_message(message: str):
+    stock.telegram.notify(
+        token=stock.telegram_got_token_error,
+        chat_id=stock.telegram_chat_id_error,
+        message=message
+    )
+
+
+# ❌ Обработчик завершения по сигналу
 def handle_exit_signal(signum, frame):
+    logger.info("📴 Получен сигнал завершения")
     send_telegram_message("Программа завершена❗️")
     sys.exit(0)
 
 
-# Установка обработчиков сигнала для корректного завершения программы
+# Установка сигналов завершения
 signal.signal(signal.SIGTERM, handle_exit_signal)
 signal.signal(signal.SIGINT, handle_exit_signal)
 
-# Отправка сообщения о запуске программы
-send_telegram_message("Программа запущена⭐️")
 
-def notify_error(action, error):
-    message = f"😨 Ошибка при {action}: {error}"
-    send_telegram_message(message)
-
-
-def update_prices(updater, file_path, update_action):
+# 🛠 Универсальная обёртка для try/except с логом и телеграмом
+def run_safe(action_description: str, func):
     try:
-        data = updater.read_sklad_csv(file_path)
-        update_action(data)
-    except AttributeError as e:
-        notify_error(f"обновлении цен в {updater.__name__}", f"Отсутствует функция read_sklad_csv: {e}")
+        logger.info(f"▶ Начало: {action_description}")
+        func()
+        logger.success(f"✅ Завершено: {action_description}")
     except Exception as e:
-        notify_error(f"обновлении цен в {updater.__name__}", e)
+        logger.exception(f"❌ Ошибка при {action_description}")
+        send_telegram_message(f"😨 Ошибка при {action_description}: {e}")
+        sys.exit(1)
 
 
-def update_stock(update_func, stock_data):
+# 🔁 Обновление остатков
+def run_price_updates():
     try:
-        update_func(stock_data)
+        logger.info("📦 Получаем складские остатки...")
+        wb_data, ym_data, oz_data = gen_sklad()
+        logger.success("✅ Остатки успешно получены")
     except Exception as e:
-        notify_error(f"обновлении данных в {update_func.__name__}", e)
+        logger.exception("❌ Ошибка при получении данных из БД")
+        send_telegram_message(f"❌ Ошибка при получении данных из БД: {e}")
+        sys.exit(1)
+
+    tasks = [
+        ("обновлении WB", lambda: wb_update(wb_data)),
+        ("обновлении YM", lambda: ym_update(ym_data)),
+        ("обновлении OZ", lambda: oz_update(oz_data)),
+    ]
+
+    for description, task in tasks:
+        run_safe(description, task)
+
+
+# 🚀 Основной запуск
+def main():
+    logger.info("🚀 Старт фонового процесса")
+    send_telegram_message("Программа запущена⭐️")
+
+    run_price_updates()  # Обновление остатков складов
+    run_safe("проверке новых заказов", check_for_new_orders)
+    run_safe("обновлении всех цен", update_all_prices)
+
+    logger.success("🏁 Все задачи завершены успешно")
 
 
 if __name__ == "__main__":
-
-    # Берем данные из Google таблиц и сохраняем в CSV
-    try:
-        gen_file_sklad.gen_sklad()
-    except Exception as e:
-        notify_error("получении данных из Google Таблицы", e)
-
-    # Берем данные из CSV и преобразовываем в нужный вид
-    try:
-        wb, ym, mm, oz = remainders.gen_sklad()
-    except Exception as e:
-        notify_error("получении данных из файла", e)
-        sys.exit(1)  # обязательно добавь выход!
-
-    # Обновляем остатки в WB, YM и MM
-    update_stock(remainders.wb_update, wb)
-    update_stock(remainders.ym_update, ym)
-    # update_stock(remainders.mm_update, mm)
-    update_stock(remainders.oz_update, oz)
-
-    # Проверяем наличие новых заказов
-    try:
-        check_for_new_orders()
-    except Exception as e:
-        notify_error("проверке новых заказов", e)
-
-    # Обновляем цены на WB
-    try:
-        df = wb_updater.load_data('sklad_prices_wildberries.csv')
-        wb_data = wb_updater.create_wb_data(df)
-        wb_updater.wb_price_update(wb_data)
-    except Exception as e:
-        notify_error("обновлении цен в Wildberries", e)
-
-    # Обновляем цены на YM
-    update_prices(ym_updater, 'sklad_prices_yandex.csv', ym_updater.ym_price_update)
-
-    # Обновляем цены на MM
-    # update_prices(mm_updater, 'sklad_prices_megamarket.csv', mm_updater.mm_price_update)
-
-    # Обновляем цены на OZ
-    update_prices(oz_updater, 'sklad_prices_ozon.csv', oz_updater.oz_price_update)
-
-
+    main()

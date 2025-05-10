@@ -1,116 +1,129 @@
 """
-Модуль order_notifications предназначен для уведомления в Telegram о новых заказов с платформ Yandex.Market и Wildberries,
+Модуль order_notifications предназначен для получения новых заказов с маркетплейсов
+Yandex.Market, Wildberries и Ozon, уведомления о них в Telegram и автоматического
+вычитания остатков со склада.
 
 Функции модуля:
-- get_orders_yandex_market: получает заказы с платформы Yandex.Market, используя API.
-- get_orders_wildberries: получает заказы с платформы Wildberries, используя API.
-- get_orders_megamarket: получает заказы с платформы Megamarket, используя API.
-- write_order_id_to_file: записывает ID заказов в файл для отслеживания уже обработанных заказов.
-- notify_about_new_orders: отправляет уведомления в Telegram о новых заказах с указанных платформ.
 
+- get_orders_yandex_market:
+    Получает заказы с платформы Yandex.Market через API.
+
+- get_orders_wildberries:
+    Получает заказы с Wildberries по API v3.
+
+- get_orders_ozon:
+    Получает необработанные заказы с платформы Ozon через API v3.
+
+- write_order_id_to_file:
+    Записывает ID заказов в файл, чтобы не обрабатывать их повторно.
+
+- update_stock:
+    Автоматически уменьшает остаток товара в базе данных или Google Sheets (для Sklad).
+
+- notify_about_new_orders:
+    Формирует сообщение о заказе и отправляет его в Telegram. Также вызывает вычитание со склада.
+
+- check_for_new_orders:
+    Централизованно вызывает сбор заказов с платформ и уведомления по ним.
 """
 
-import requests
 import os
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+import sqlite3
+import requests
 import pandas as pd
-from dotenv import load_dotenv
-from notifiers import get_notifier
+import gspread
+
 from datetime import datetime, timedelta
-import time
-import json
+from dotenv import load_dotenv
+from loguru import logger
+from notifiers import get_notifier
 
-load_dotenv()
+# Загрузка переменных окружения из .env
+load_dotenv(dotenv_path=os.path.join("System", ".env"))
 
-telegram_got_token = os.getenv('telegram_got_token')  # тут прописан ID телеграм бота
-telegram_chat_id = os.getenv('telegram_chat_id')  # тут прописан ID общего чата
+# Настройка Telegram-уведомлений
+telegram_got_token = os.getenv('telegram_got_token')
+telegram_chat_id = os.getenv('telegram_chat_id')
 telegram = get_notifier('telegram')
 
 
-def update_stock(articul):
-    pd.set_option('display.max_columns', None)
-    pd.set_option('display.expand_frame_repr', False)
+def update_stock(articul, platform):
+    logger.info(f"🔁 Вычитание со склада: {articul} | Платформа: {platform}")
+    db_path = "System/marketplace_base.db"
+    conn = sqlite3.connect(db_path, timeout=10)
+    articul = str(articul).strip()
 
-    # Подключаемся к Google Sheets
-    gc = gspread.service_account(filename='my-python-397519-3688db4697d6.json')
-    sh = gc.open("КАЗНА")
-    worksheet_name = "СКЛАД"
-    worksheet = sh.worksheet(worksheet_name)
+    platform_table_map = {
+        'Yandex': 'yandex',
+        'Ozon': 'ozon',
+        'Wildberries': 'wildberries'
+    }
 
-    # Загружаем данные из таблицы
-    data = worksheet.get_all_values()
+    table = platform_table_map.get(platform)
+    if not table:
+        return
 
-    # Создаём DataFrame
-    columns = data[0]
-    sklad = pd.DataFrame(data[1:], columns=columns)
+    df = pd.read_sql_query(f"SELECT * FROM '{table}' WHERE Арт_MC = ?", conn, params=(articul,))
+    if df.empty:
+        conn.close()
+        return
 
-    # Преобразование данных в числовые значения где необходимо
-    sklad['Наличие'] = pd.to_numeric(sklad['Наличие'], errors='coerce').fillna(0).astype(int)
+    row = df.iloc[0]
+    model = row.get("Модель", "Неизвестно")
+    stock = int(row.get("Нал", 0))
+    supplier = row.get("Поставщик", "N/A")
 
-    # Восстанавливаем числовой тип артикулов
-    sklad['Арт мой'] = sklad['Арт мой'].apply(lambda x: int(x) if pd.notna(x) and x != '' else '')
-    sklad['Арт UM'] = sklad['Арт UM'].apply(lambda x: int(x) if pd.notna(x) and x != '' else '')
+    if supplier.lower() == 'sklad':
+        logger.warning(f"❗ Артикул {articul} не найден на складе Google Sheets.")
+        gc = gspread.service_account(filename='System/my-python-397519-3688db4697d6.json')
+        sh = gc.open("КАЗНА")
+        worksheet = sh.worksheet("СКЛАД")
+        data = worksheet.get_all_values()
+        sklad = pd.DataFrame(data[1:], columns=data[0])
 
-    # Приведение артикула к строковому формату только для поиска
-    articul = str(articul)
+        sklad['Наличие'] = pd.to_numeric(sklad['Наличие'], errors='coerce').fillna(0).astype(int)
+        sklad['Арт мой'] = sklad['Арт мой'].apply(lambda x: str(int(x)) if str(x).isdigit() else '')
 
-    # Фильтрация строк только с UNT и статусом 'Товар в UM'
-    filtered_sklad = sklad[((sklad['Поставщик'] == 'SKL') & (sklad['Статус'] == 'На складе')) |
-                           ((sklad['Поставщик'] == 'UNT') & (sklad['Статус'] == 'Товар в UM'))]
+        matched_rows = sklad[sklad['Арт мой'] == articul]
+        if matched_rows.empty:
+            return
 
-    # Поиск строки по артикулу
-    matched_rows = filtered_sklad[filtered_sklad['Арт мой'].astype(str) == articul]
-
-    if not matched_rows.empty:
-        # Извлечение индекса строки
         row_index = matched_rows.index[0]
+        prev_q = sklad.at[row_index, 'Наличие']
+        sklad.at[row_index, 'Наличие'] = max(0, prev_q - 1)
+        new_q = sklad.at[row_index, 'Наличие']
 
-        # Определяем склад
-        supplier = sklad.at[row_index, 'Поставщик']
-        stock_status = sklad.at[row_index, 'Статус']
+        updated_data = sklad.iloc[:, :8].replace([float('inf'), float('-inf')], 0).fillna(0).values.tolist()
+        worksheet.update(values=updated_data, range_name='A2:H')
 
-        if supplier == 'SKL' and stock_status == 'На складе':
-            sklad_name = "Наш склад"
-        elif supplier == 'UNT' and stock_status == 'Товар в UM':
-            sklad_name = "UM"
-        else:
-            sklad_name = "Неизвестный склад"
-
-        # Извлечение данных о товаре
-        previous_quantity = int(sklad.at[row_index, 'Наличие'])  # Приводим к int
-        sklad.at[row_index, 'Наличие'] -= 1
-        updated_quantity = int(sklad.at[row_index, 'Наличие'])  # Приводим к int
-        product_name = sklad.loc[row_index, 'Модель']
-
-        # Если это Series, извлекаем первое значение
-        if isinstance(product_name, pd.Series):
-            product_name = product_name.iloc[0]
-
-        # Убираем лишние пробелы
-        product_name = str(product_name).strip()
-
-        # Формирование сообщения для Telegram
         message = (
             f"✅ Бот вычел со склада\n\n"
-            f"Товар: \"{product_name}\"\n"
+            f"Товар: \"{model}\"\n"
             f"Артикул: {articul}\n"
-            f"Было: {previous_quantity}, стало: {updated_quantity}.\n"
-            f"Склад: {sklad_name}"
+            f"Было: {prev_q}, стало: {new_q}.\n"
+            f"Склад: {supplier}"
+        )
+    else:
+        new_stock = max(0, stock - 1)
+        cur = conn.cursor()
+        cur.execute(f"UPDATE '{table}' SET Нал = ? WHERE Арт_MC = ?", (new_stock, articul))
+        conn.commit()
+        logger.success(f"✅ Остаток обновлён: {articul} | {stock} → {new_stock}")
+
+        message = (
+            f"✅ Бот вычел со склада\n\n"
+            f"Товар: \"{model}\"\n"
+            f"Артикул: {articul}\n"
+            f"Было: {stock}, стало: {new_stock}.\n"
+            f"Склад: {supplier}"
         )
 
-        # Отправляем сообщение в Telegram
-        telegram.notify(token=telegram_got_token, chat_id=telegram_chat_id, message=message)
-
-        # Убираем NaN и бесконечные значения перед обновлением в Google Sheets
-        sklad = sklad.replace([float('inf'), float('-inf')], 0).fillna(0)
-
-        # Ограничиваем данные для обновления до диапазона A:H
-        updated_data = sklad.iloc[:, :8].values.tolist()
-        worksheet.update(values=updated_data, range_name='A2:H')
+    conn.close()
+    telegram.notify(token=telegram_got_token, chat_id=telegram_chat_id, message=message)
 
 
 def get_orders_yandex_market():
+    logger.info("📥 Получаем заказы с Yandex.Market...")
     campaign_id = os.getenv('campaign_id')
     ym_token = os.getenv('ym_token')
     url_ym = f'https://api.partner.market.yandex.ru/campaigns/{campaign_id}/orders'
@@ -122,31 +135,29 @@ def get_orders_yandex_market():
     }
     response = requests.get(url_ym, headers=headers, params=params, timeout=10)
     if response.status_code == 200:
+        orders_data = response.json().get('orders', [])  # Получаем список заказов
+        logger.success(f"✅ Заказы от Yandex получены: {len(orders_data)} шт.")
         orders_data = response.json().get('orders', [])  # Получаем список заказов из ключа 'orders'
         return orders_data  # Возвращаем список заказов
+    else:
+        logger.warning(f"⚠ Ошибка при запросе заказов с Yandex: {response.status_code} — {response.text}")
+        return []
 
 
 def get_orders_wildberries():
+    logger.info("📥 Получаем заказы с Wildberries...")
     wb_api_token = os.getenv('wb_token')
     url = 'https://marketplace-api.wildberries.ru/api/v3/orders/new'
     headers = {'Authorization': wb_api_token}
     response = requests.get(url, headers=headers, timeout=10)
     if response.status_code == 200:
         orders = response.json().get('orders', [])
+        logger.success(f"✅ Заказы от WB получены: {len(orders)} шт.")
+        orders = response.json().get('orders', [])
         return orders
-
-
-def get_orders_megamarket():
-    mm_token = os.getenv('mm_token')
-    url_mm = 'https://api.megamarket.tech/api/market/v1/partnerService/order/new'
-    headers = {"Authorization": f"Bearer {mm_token}"}
-    response = requests.get(url_mm, headers=headers, timeout=10)
-    if response.status_code == 200:
-        orders_data = response.json().get('data', {}).get('shipments', [])
-        return orders_data
-
-
-
+    else:
+        logger.warning(f"⚠ Ошибка при запросе заказов с Wildberries: {response.status_code} — {response.text}")
+        return []
 
 def get_orders_ozon():
     url = "https://api-seller.ozon.ru/v3/posting/fbs/unfulfilled/list"
@@ -164,19 +175,19 @@ def get_orders_ozon():
         "dir": "ASC",  # Сортировка по возрастанию
         "filter": {
             "cutoff_from": cutoff_from,  # Начало диапазона времени
-            "cutoff_to": cutoff_to,      # Конец диапазона времени
+            "cutoff_to": cutoff_to,  # Конец диапазона времени
             "status": "awaiting_packaging",  # Пример статуса (необработанные отправления)
             "delivery_method_id": [],  # Опционально
-            "provider_id": [],         # Опционально
-            "warehouse_id": []         # Опционально
+            "provider_id": [],  # Опционально
+            "warehouse_id": []  # Опционально
         },
         "limit": 100,  # Максимальное количество возвращаемых элементов за один запрос
-        "offset": 0,   # Начальный индекс
+        "offset": 0,  # Начальный индекс
         "with": {
             "analytics_data": True,  # Включить аналитические данные
-            "barcodes": True,        # Включить штрихкоды
+            "barcodes": True,  # Включить штрихкоды
             "financial_data": True,  # Включить финансовые данные
-            "translit": True         # Включить транслитерацию
+            "translit": True  # Включить транслитерацию
         }
     }
     response = requests.post(url, headers=headers, json=payload, timeout=10)
@@ -186,7 +197,7 @@ def get_orders_ozon():
         filtered_orders = [order for order in orders if order.get("status") == "awaiting_packaging"]
         return filtered_orders
     else:
-        print(f"Ошибка при получении заказов с Ozon: {response.status_code}, {response.text}")
+        logger.warning(f"⚠ Ошибка при получении заказов с Ozon: {response.status_code} — {response.text}")
         return []
 
 
@@ -204,6 +215,7 @@ def write_order_id_to_file(order_id, filename):
 
         # Проверяем, есть ли уже такой ID в файле
         if str(order_id) not in existing_ids:
+            logger.debug(f"✏️ Записан новый ID заказа: {order_id} → {filename}")
             # Если нет, добавляем его в файл
             with open(filename, 'a') as file:
                 file.write(str(order_id) + '\n')
@@ -214,22 +226,28 @@ def write_order_id_to_file(order_id, filename):
 
 
 # Путь к файлу, куда вы хотите записывать ID заказов
-file_path = 'order_ids.txt'
+file_path = 'System/order_ids.txt'
 
 
 # Функция, которая берет название товара из файла, когда есть заказ с WB
 def get_product(nmId):
-    # Путь к вашему CSV файлу
-    file_path = 'sklad_prices_wildberries.csv'
-    # Загрузить данные из CSV файла в DataFrame
-    sklad = pd.read_csv(file_path)
-    # Найти строку, где "WB Артикул" соответствует nmId
-    product_row = sklad[sklad['WB Артикул'] == nmId]
-    # Если совпадение найдено, вернуть значение из столбца "Модель"
-    if not product_row.empty:
-        return product_row.iloc[0]['Модель']
-    else:
+    """Получает название модели из таблицы wildberries по WB Артикулу."""
+    db_path = 'System/marketplace_base.db'
+    try:
+        conn = sqlite3.connect(db_path, timeout=10)
+        cursor = conn.cursor()
+        # Поиск строки по значению "WB Артикул"
+        cursor.execute("SELECT Модель FROM wildberries WHERE [WB Артикул] = ?", (str(nmId),))
+        result = cursor.fetchone()
+        if result:
+            return result[0]  # Модель
+        else:
+            return None
+    except Exception as e:
+        logger.error(f"❌ Ошибка при получении модели из базы данных: {e}")
         return None
+    finally:
+        conn.close()
 
 
 def notify_about_new_orders(orders, platform, supplier):
@@ -243,9 +261,10 @@ def notify_about_new_orders(orders, platform, supplier):
             order_id = order.get('posting_number') if supplier == 'Ozon' else order.get('id')
             # Запись ID заказа в файл перед добавлением товаров в сообщение
             if write_order_id_to_file(order_id, file_path):
+                logger.info(f"📦 Новый заказ: {order_id} ({platform})")
                 message = f"📦 Новый заказ на *{platform}*:\n\n"
                 message += f"ID заказа: {order_id}\n"
-                if supplier == 'Yandex.Market':
+                if supplier == 'Yandex':
                     # Добавляем дату отгрузки
                     shipment_date = next(
                         (shipment.get('shipmentDate') for shipment in order.get('delivery', {}).get('shipments', [])),
@@ -274,12 +293,6 @@ def notify_about_new_orders(orders, platform, supplier):
                     message += f"Товар: {get_product(order.get('nmId'))} \n"
                     message += f"Цена: {str(order.get('convertedPrice'))[:-2]} р.\n"
                     message_minus_odin = order.get('article')
-                elif supplier == 'MegaMarket':
-                    for shipment in order.get('shipments', []):
-                        for item in shipment.get('items', []):
-                            message += f"Товар: {item.get('itemName')}\nЦена: {item.get('price')} р.\n"
-
-
                 elif supplier == 'Ozon':  # Добавляем поддержку Ozon
                     shipment_date_raw = order.get('shipment_date')  # Получаем дату отгрузки
                     # Преобразуем дату из ISO 8601 в формат DD.MM.YYYY
@@ -298,27 +311,27 @@ def notify_about_new_orders(orders, platform, supplier):
                         message += f"Цена: {price} р.\n"  # Форматируем цену
                         message_minus_odin = product.get('offer_id')
 
-
                 message += '\n'
-                telegram.notify(token=telegram_got_token, chat_id=telegram_chat_id, message=message, parse_mode='markdown')
+                telegram.notify(token=telegram_got_token, chat_id=telegram_chat_id, message=message,
+                                parse_mode='markdown')
                 # Затем вычитаем товар со склада
                 if message_minus_odin:  # Если товар определён
-                    update_stock(message_minus_odin)
+                    logger.debug(f"🔧 Вызываем update_stock для {message_minus_odin} | Платформа: {platform}")
+                    update_stock(message_minus_odin, platform)
                 message1 = '📦'
                 telegram.notify(token=telegram_got_token, chat_id=telegram_chat_id, message=message1)
 
 
 def check_for_new_orders():
+    logger.info("🚦 Проверка новых заказов...")
     orders_yandex_market = get_orders_yandex_market()
-    notify_about_new_orders(orders_yandex_market, "Yandex.Market", "Yandex.Market")
+    notify_about_new_orders(orders_yandex_market, "Yandex", "Yandex")
 
     orders_wildberries = get_orders_wildberries()
     notify_about_new_orders(orders_wildberries, "Wildberries", "Wildberries")
 
-    # orders_megamarket = get_orders_megamarket()
-    # notify_about_new_orders(orders_megamarket, "Megamarket", "Megamarket")
-
     orders_ozon = get_orders_ozon()  # Получаем заказы с Ozon
     notify_about_new_orders(orders_ozon, "Ozon", "Ozon")  # Уведомляем о новых заказах с Ozon
+
 
 # check_for_new_orders()

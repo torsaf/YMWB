@@ -1,0 +1,1116 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Просмотр таблиц</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='icons.png') }}">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0 auto;
+            padding: 0;
+            min-width: 100vw;
+
+        }
+
+        .nav {
+            margin-bottom: 20px;
+            white-space: nowrap;
+        }
+
+        .nav a {
+            display: inline-block;
+            margin-right: 10px;
+            padding: 12px 20px;
+            font-size: 16px;
+            background-color: #e0e0e0;
+            border-radius: 8px;
+            text-decoration: none;
+            color: #333;
+            font-weight: bold;
+            transition: all 0.2s ease;
+            white-space: nowrap; /* 👈 ЭТО НЕ ДАСТ СЛОВАМ ПЕРЕНОСИТЬСЯ */
+        }
+
+        .nav a:hover {
+            transform: scale(1.05);
+        }
+
+        .nav a.active {
+            background-color: #007bff;
+            color: white;
+        }
+
+        table {
+            border-collapse: separate;
+            border-spacing: 0;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        td, th {
+            height: 25px;
+            vertical-align: middle;
+            padding: 4px 6px;
+            border: 1px solid #ccc;
+            text-align: left;
+            white-space: nowrap;
+        }
+
+        th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+        }
+
+        h3 {
+            margin-top: 30px;
+        }
+        th a {
+            color: black;
+            text-decoration: none;
+        }
+
+        th a:visited {
+            color: black;
+        }
+
+        th a:hover {
+            color: black;
+            text-decoration: none;
+        }
+        .text-muted {
+            color: #888;
+        }
+        .text-center {
+            text-align: center;
+        }
+
+        .text-left {
+            text-align: left;
+        }
+        table {
+            border-collapse: separate;
+            border-spacing: 0;
+            border-radius: 10px;
+            overflow: hidden;
+            table-layout: auto;
+        }
+
+        th:first-child {
+            border-top-left-radius: 10px;
+        }
+
+        th:last-child {
+            border-top-right-radius: 10px;
+        }
+
+        tr:last-child td:first-child {
+            border-bottom-left-radius: 10px;
+        }
+
+        tr:last-child td:last-child {
+            border-bottom-right-radius: 10px;
+        }
+        td {
+            width: 140px; /* либо auto, либо подберите вручную под ваш контент */
+            max-width: 140px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            padding: 4px 6px;
+        }
+
+        td input {
+            width: 100%;
+            box-sizing: border-box;
+            height: 100%;
+            padding: 0 4px;
+            font-size: 14px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        td, th {
+            height: 25px;
+            max-height: 30px;
+            padding: 4px 6px;
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+        }
+        td input {
+            height: 100%;
+            width: 100%;
+            padding: 2px 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            line-height: 1;
+        }
+
+        td.text-left {
+            min-width: 270px;
+            max-width: 270px;
+            width: 270px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        td.text-left input {
+            width: 100%;
+            min-width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
+            font-size: 14px;
+            padding: 2px 4px;
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+        }
+
+        td.text-center input,
+        td.text-center select {
+            text-align: center;
+        }
+        td select {
+            height: 100%;
+            width: 100%;
+            padding: 2px 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            background-color: white;
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg fill='gray' height='14' viewBox='0 0 24 24' width='14' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 6px center;
+            background-size: 16px;
+            padding-right: 24px;
+            line-height: 1;
+        }
+        .header-yandex th {
+            background-color: #fdf7b2;
+        }
+
+        .header-ozon th {
+            background-color: #d5e4ff;
+            color: black;
+        }
+
+        .header-wildberries th {
+            background-color: #efc1ed;
+            color: black;
+        }
+
+        .nav a.active.yandex {
+            background-color: #fdf7b2;
+            color: black;
+        }
+
+        .nav a.active.ozon {
+            background-color: #d5e4ff;
+            color: black;
+        }
+
+        .nav a.active.wildberries {
+            background-color: #efc1ed;
+            color: black;
+        }
+        .add-button-yandex {
+            background-color: #fdf7b2;
+            color: black;
+        }
+
+        .add-button-ozon {
+            background-color: #d5e4ff;
+            color: black;
+        }
+
+        .add-button-wildberries {
+            background-color: #efc1ed;
+            color: black;
+        }
+        .stats-yandex {
+            background-color: #fff8dc;
+        }
+
+        .stats-ozon {
+            background-color: #e0ffff;
+        }
+
+        .stats-wildberries {
+            background-color: #f3e6ff;
+        }
+        #manual-update-btn {
+            transition: all 0.2s ease;
+            transform-origin: left center;
+        }
+
+        #manual-update-btn:hover {
+            transform: scale(1.1);
+            color: #0056b3;
+            text-decoration: none; /* убираем подчёркивание */
+        }
+        .toggle-switch {
+          position: relative;
+          display: inline-block;
+          width: 26px;
+          height: 14px;
+        }
+        .toggle-switch input {
+          opacity: 0;
+          width: 0;
+          height: 0;
+        }
+        .toggle-slider {
+          position: absolute;
+          cursor: pointer;
+          top: 0; left: 0;
+          right: 0; bottom: 0;
+          background-color: #ccc;
+          transition: .3s;
+          border-radius: 14px;
+        }
+        .toggle-slider:before {
+          position: absolute;
+          content: "";
+          height: 10px;
+          width: 10px;
+          left: 2px;
+          bottom: 2px;
+          background-color: white;
+          transition: .3s;
+          border-radius: 50%;
+        }
+        .toggle-switch input:checked + .toggle-slider {
+          background-color: #3395ff;
+        }
+        .toggle-switch input:checked + .toggle-slider:before {
+          transform: translateX(12px);
+        }
+        tr.highlighted {
+            background-color: var(--highlight-color) !important;
+        }
+        td[title] {
+    position: relative;
+    cursor: default;
+        }
+
+        td[title]:hover::after {
+            content: attr(title);
+            position: absolute;
+            top: 100%;
+            left: 0;
+            white-space: normal;
+            background: #333;
+            color: #fff;
+            padding: 6px 10px;
+            border-radius: 5px;
+            font-size: 14px;
+            z-index: 999;
+            max-width: 500px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+        td.comment-cell {
+            min-width: 210px;
+            max-width: 210px;
+            width: 210px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        td.comment-cell input {
+            width: 100%;
+            min-width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
+            font-size: 14px;
+            padding: 2px 4px;
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+        }
+        .wrapper {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .top-panel {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .table-container {
+            display: flex;
+            justify-content: center;
+            width: 100%;
+            margin-top: -33px;
+        }
+        table {
+            display: inline-table;
+            margin: 0 auto;
+        }
+        input[type="search"]::-webkit-search-cancel-button {
+            display: none;
+        }
+        .letter-filter a {
+            padding: 6px 10px;
+            font-size: 14px;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+            text-decoration: none;
+            color: #333;
+            transition: all 0.2s ease;
+        }
+
+        .letter-filter a:hover {
+            background-color: #f0f0f0;
+        }
+
+        .letter-filter a.active {
+            background-color: #007bff;
+            color: white;
+            border-color: #007bff;
+        }
+        html, body {
+            width: max-content;     /* расширяется по содержимому */
+            overflow-x: auto;       /* появляется горизонтальный скролл */
+            overflow-y: auto;     /* скрываем вертикальный, если не нужен */
+            height: 100%;
+        }
+        /* ДОБАВЬ в конец того же <style>, где уже лежит мобильный медиазапрос */
+        /* --- Мобильный фикс (≤ 767 px) ----------------------------------- */
+        @media (max-width: 767px){
+            html, body{
+                 height: auto;     /* страница может расти вниз */
+                 min-height: 100vh;/* но не меньше высоты видимого экрана */
+             }
+
+          /* 1. Обнуляем центрирование только для таблицы  */
+          .table-container{
+              justify-content: flex-start;   /* вместо center */
+              overflow-x: auto;              /* собственная полоса прокрутки */
+              /* 2. «Вытягиваем» контейнер на всю ширину,
+                    не трогая padding у .wrapper */
+              margin-left: -20px;            /* съедаем левый внутренний отступ wrapper */
+              margin-right: -20px;           /* …и правый */
+              padding-left: 20px;            /* возвращаем «буфер», чтобы текст не лип к краю */
+              padding-right: 20px;
+          }
+
+          /* 3. Таблица без margin:auto, чтобы не убегала вправо */
+          .table-container > table{
+              margin: 0;
+          }
+        }
+    </style>
+</head>
+<body>
+<div class="wrapper">
+    <div class="top-panel" style="
+        display: flex;
+        justify-content: flex-start;
+        align-items: flex-start;
+        gap: 60px;  /* ✅ равномерное расстояние между всеми блоками */
+        flex-wrap: wrap;
+    ">
+      <!-- Блоки "Sklad обновлен" и статистика -->
+      <div style="display: flex; gap: 30px; align-items: flex-start;">
+        {% if last_download_time %}
+        <div style="font-size: 15px; color: #555; display: flex; flex-direction: column; gap: 6px; min-width: 200px;">
+          <div style="font-weight: normal;">Sklad обновлен:</div>
+          <div>{{ last_download_time }}</div>
+          <div style="font-size: 15px; color: #007bff; cursor: pointer;" id="manual-update-btn">
+            Обновить
+          </div>
+        </div>
+        {% endif %}
+
+        {% if stats %}
+        <div style="font-size: 15px; color: #555; display: flex; flex-direction: column; gap: 6px; min-width: 160px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span>Всего товаров:</span>
+            <span>{{ stats['Всего товаров'] }}</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span>В наличии:</span>
+            <span>{{ stats['В наличии'] }}</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span>Отключено:</span>
+            <span>{{ stats['Отключено'] }}</span>
+          </div>
+        </div>
+        {% endif %}
+      </div>
+      <!-- Правый блок с выключателями -->
+      <div class="nav" style="display: flex; gap: 6px; align-items: center; margin-top: 19px;">
+        <a href="/table/yandex" class="{% if selected_table == 'yandex' %}active yandex{% endif %}">Yandex</a>
+        <a href="/table/ozon" class="{% if selected_table == 'ozon' %}active ozon{% endif %}">Ozon</a>
+        <a href="/table/wildberries" class="{% if selected_table == 'wildberries' %}active wildberries{% endif %}">Wildberries</a>
+      </div>
+
+      <!-- Переключатели -->
+      <div style="font-size: 15px; color: #555; display: flex; flex-direction: column; gap: 6px; min-width: 120px;">
+        {% for mp in ['yandex', 'ozon', 'wildberries'] %}
+        <label style="display: flex; align-items: center; justify-content: space-between;">
+          <span style="min-width: 90px;">{{ mp.capitalize() }}</span>
+          <label class="toggle-switch">
+            <input type="checkbox" data-market="{{ mp }}" class="global-toggle" {% if global_stock_flags[mp] %}checked{% endif %}>
+            <span class="toggle-slider"></span>
+          </label>
+        </label>
+        {% endfor %}
+      </div>
+      <!-- Кнопка "Статистика" -->
+      <div style="margin-top: 19px;">
+          <a href="/statistic"
+             style="display: flex; align-items: center; gap: 6px;
+                    padding: 6px 12px; font-size: 15px;
+                    border-radius: 6px; border: 1px solid #ccc;
+                    background-color: #f0f0f0;
+                    color: #333; text-decoration: none;
+                    transition: all 0.2s;">
+            <img src="{{ url_for('static', filename='icons/stats.svg') }}" alt="Статистика" width="16" height="16">
+            Статистика
+          </a>
+        </div>
+
+
+        <!-- Блок поиска + алфавит -->
+        <div style="display: flex; align-items: center; gap: 100px; flex-wrap: wrap; margin-top: -55px;">
+
+          <!-- Поисковая форма -->
+          <form method="GET" action="/table/{{ selected_table }}" style="display: flex; align-items: center; gap: 10px; margin-left: 60px;">
+            <div style="position: relative;">
+              <input type="search" id="custom-search" name="search"
+                     placeholder="Поиск: Арт_MC, Поставщик, Модель"
+                     value="{{ request.args.get('search', '') }}"
+                     style="font-size: 15px; padding: 6px 32px 6px 12px; border-radius: 6px;
+                            width: 310px; box-sizing: border-box; border: 1px solid #ccc;"
+                     onsearch="this.value=''; this.form.submit();">
+              <span id="clear-search"
+                    style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+                           cursor: pointer; font-size: 16px; color: #aaa; display: none;">&times;</span>
+            </div>
+            <button type="submit"
+                    style="display: flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 15px;
+                           border-radius: 6px; border: 1px solid #ccc; background-color: #f0f0f0;
+                           cursor: pointer; transition: all 0.2s;">
+              <img src="{{ url_for('static', filename='icons/search.svg') }}" alt="🔍" width="16" height="16">
+              Найти
+            </button>
+          </form>
+
+          <!-- Алфавит -->
+          <div class="letter-filter" style="display: flex; flex-direction: column; gap: 6px; margin-top: 2px;">
+            <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+              {% set row1 = ['0-9', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M'] %}
+              {% for letter in row1 %}
+                <a href="{{ url_for('show_table', table_name=selected_table, letter=letter, search=request.args.get('search', '')) }}"
+                   class="{% if request.args.get('letter') == letter %}active{% endif %}">
+                  {{ letter }}
+                </a>
+              {% endfor %}
+            </div>
+            <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+              {% set row2 = ['N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'А-Я'] %}
+              {% for letter in row2 %}
+                <a href="{{ url_for('show_table', table_name=selected_table, letter=letter, search=request.args.get('search', '')) }}"
+                   class="{% if request.args.get('letter') == letter %}active{% endif %}">
+                  {{ letter }}
+                </a>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+        {% if table_data is not none %}
+            <div class="table-container">
+                 <table>
+                    <thead class="header-{{ selected_table }}">
+                        <tr>
+                            {% for col in table_data.columns %}
+                                <th class="{% if col.strip() == 'Модель' %}text-left{% else %}text-center{% endif %}">
+                                    <a href="/table/{{ selected_table }}?sort={{ col }}&order={% if sort_column == col and sort_order == 'asc' %}desc{% else %}asc{% endif %}">
+                                        {{ col }}
+                                    </a>
+                                </th>
+                            {% endfor %}
+                            <th class="text-center">Действия</th>
+                        </tr>
+                        <tr>
+                            <form method="POST" action="/add/{{ selected_table }}">
+                                {% for col in table_data.columns %}
+                                    <td class="{% if col.strip() == 'Модель' %}text-left{% else %}text-center{% endif %}">
+                                        {% if col.strip() not in ['№', 'Цена YM', 'Цена OZ', 'Цена WB'] %}
+                                            {% if col.strip() == 'Поставщик' %}
+                                                <select name="Поставщик">
+                                                    <option value=""></option>
+                                                    <option value="Sklad">Sklad</option>
+                                                    <option value="United">United</option>
+                                                    <option value="Invask">Invask</option>
+                                                    <option value="Okno">Okno</option>
+                                                </select>
+                                            {% elif col.strip() == 'Статус' %}
+                                                <select name="Статус">
+                                                    <option value=""></option>
+                                                    <option value="выкл.">выкл.</option>
+                                                </select>
+                                            {% else %}
+                                                <input type="text" name="{{ col }}"
+                                                    {% if col in ['Нал', 'Опт', 'Наценка', 'Арт_MC', 'WB Barcode', 'WB Артикул'] %}
+                                                        inputmode="numeric" pattern="\d*" maxlength="20"
+                                                        oninput="this.value = this.value.replace(/\D/g, '')"
+                                                    {% endif %}
+                                                >
+                                            {% endif %}
+                                        {% else %}
+                                            <!-- вычисляемое поле -->
+                                        {% endif %}
+                                    </td>
+                                {% endfor %}
+                                <td class="text-center">
+                                    <button type="submit" title="Добавить товар"
+                                        class="add-button-{{ selected_table }}"
+                                        style="
+                                            border: none;
+                                            padding: 6px 12px;
+                                            border-radius: 5px;
+                                            cursor: pointer;
+                                            font-size: 14px;
+                                        ">
+                                        Добавить
+                                    </button>
+                                </td>
+                            </form>
+                        </tr>
+                    </thead>
+
+
+                    <tbody>
+                        {% for row in table_data.values.tolist() %}
+                        <tr>
+                            {% for col, item in zip(table_data.columns, row) %}
+                                {% set value = item if item is not none else '' %}
+                                <td class="{% if col.strip() == 'Модель' %}text-left{% elif col.strip() == 'Комментарий' %}comment-cell{% else %}text-center{% endif %}{% if col.strip() in ['Поставщик', 'Артикул'] %} text-muted{% endif %}"
+                                    {% if col.strip() in ['Модель', 'Комментарий'] and value|length > 35 %}title="{{ value }}"{% endif %}>
+                                    {% if col.strip() in ['Опт', 'Цена YM', 'Цена OZ', 'Цена WB'] %}
+                                        {% if value is number %}
+                                            {{ '{:,.0f} р.'.format(value).replace(',', ' ') }}
+                                        {% else %}
+                                            {{ value }}
+                                        {% endif %}
+                                    {% elif col.strip() == 'Наценка' %}
+                                        {{ value }} %
+                                    {% else %}
+                                        {{ value }}
+                                    {% endif %}
+                                </td>
+                            {% endfor %}
+                            <td class="text-center action-cell">
+                                <button type="button" class="edit-btn" style="border:none; background:none; cursor:pointer;">
+                                    <img src="{{ url_for('static', filename='icons/file-edit.svg') }}" alt="Редактировать" width="18">
+                                </button>
+                                <form method="post" action="/delete/{{ selected_table }}/{{ row[table_data.columns.get_loc('Артикул')] }}" class="delete-form" style="display:inline;">
+                                    <input type="hidden" name="item_name" value="{{ row[table_data.columns.get_loc('Модель')] }}">
+                                    <button type="button" class="delete-btn" style="border:none; background:none; cursor:pointer;">
+                                        <img src="{{ url_for('static', filename='icons/trash.svg') }}" alt="Удалить" width="18">
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% endif %}
+</div>
+    <script src="{{ url_for('static', filename='js/sweetalert2.all.min.js') }}"></script>
+    <script>
+    document.querySelectorAll('.delete-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            const form = this.closest('form');
+            const itemName = form.querySelector('input[name="item_name"]').value;
+
+            Swal.fire({
+                title: `Удалить товар "${itemName}"?`,
+                text: "Это действие нельзя отменить!",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#aaa',
+                confirmButtonText: 'Да, удалить',
+                cancelButtonText: 'Отмена'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    form.submit();
+                }
+            });
+        });
+    });
+    </script>
+    <script>
+    document.querySelectorAll('.edit-btn').forEach(function(button) {
+        button.addEventListener('click', function () {
+            const row = this.closest('tr');
+
+            const table = "{{ selected_table }}";
+            const headers = {{ table_data.columns.tolist() | tojson }};
+            const cells = row.querySelectorAll('td');
+            const indexOfArtMC = headers.indexOf("Арт_MC");
+            const itemId = cells[indexOfArtMC].innerText.trim();
+
+
+            const numericFields = ['Опт', 'Цена YM', 'Цена OZ', 'Цена WB', 'Наценка', 'Нал'];
+            const recalcPrices = () => {
+                const optInput = row.querySelector('input[name="Опт"]');
+                const markupInput = row.querySelector('input[name="Наценка"]');
+
+                const opt = parseFloat(optInput?.value.replace(/\s/g, ''));
+                const markup = parseFloat(markupInput?.value.replace(/\s/g, ''));
+
+                if (!isNaN(opt) && !isNaN(markup)) {
+                    const newPrice = Math.round(opt + (opt * markup / 100));
+                    ['Цена YM', 'Цена OZ', 'Цена WB'].forEach(field => {
+                        const td = row.querySelector(`td[data-price-target="${field}"]`);
+                        if (td) {
+                            td.innerText = newPrice.toLocaleString('ru-RU') + ' р.';
+                        }
+                    });
+                }
+            };
+
+            // Заменяем td на input'ы
+            for (let i = 0; i < headers.length; i++) {
+                const td = cells[i];
+                if (['Модель', 'Комментарий'].includes(headers[i].trim())) {
+                    td.classList.add('text-left');
+                    td.classList.remove('text-center');
+                } else {
+                    td.classList.add('text-center');
+                    td.classList.remove('text-left');
+                }
+                const val = td.innerText.trim();
+
+                const skipInputFields = ['№', 'Цена YM', 'Цена OZ', 'Цена WB'];
+                if (!headers[i] || skipInputFields.includes(headers[i])) {
+                    if (['Цена YM', 'Цена OZ', 'Цена WB'].includes(headers[i])) {
+                        td.setAttribute('data-price-target', headers[i]); // 💡 помечаем td
+                    }
+                    continue;
+                }
+                td.style.width = td.offsetWidth + 'px';
+                td.innerHTML = '';
+                let input;
+                if (headers[i] === 'Поставщик') {
+                    input = document.createElement('select');
+                    input.name = 'Поставщик';
+                    ['','Sklad','United','Invask','Okno'].forEach(optVal => {
+                        const option = document.createElement('option');
+                        option.value = optVal;
+                        option.textContent = optVal;
+                        if (optVal === val) option.selected = true;
+                        input.appendChild(option);
+                    });
+                } else if (headers[i] === 'Статус') {
+                    input = document.createElement('select');
+                    input.name = 'Статус';
+                    ['','выкл.'].forEach(optVal => {
+                        const option = document.createElement('option');
+                        option.value = optVal;
+                        option.textContent = optVal;
+                        if (optVal === val) option.selected = true;
+                        input.appendChild(option);
+                    });
+                } else {
+                    input = document.createElement('input');
+                    if (headers[i] === 'Комментарий') {
+                        td.classList.add('comment-cell');
+                        input.style.minWidth = '210px';
+                        input.style.maxWidth = '280px';
+                    }
+                    input.name = headers[i];
+                    if (headers[i] === 'Нал') {
+                        const onoffSelect = row.querySelector('select[name="Статус"]');
+                        if (onoffSelect && onoffSelect.value === 'выкл.') {
+                            input.value = '0';
+                            input.disabled = true;
+                        }
+                    }
+                    if (numericFields.includes(headers[i])) {
+                        input.value = val.replace(/\s/g, '').replace('р.', '').replace('%', '');
+                    } else {
+                        input.value = val;
+                    }
+                    input.style.width = '100%';
+                    input.type = 'text';
+                    if (numericFields.includes(headers[i])) {
+                        input.inputMode = 'numeric';
+                        input.pattern = '\\d*';
+                        input.addEventListener('input', function () {
+                            this.value = this.value.replace(/[^\d]/g, '');
+                        });
+                        input.addEventListener('paste', function (e) {
+                            e.preventDefault();
+                        });
+                        input.addEventListener('drop', function (e) {
+                            e.preventDefault();
+                        });
+                        if (['Опт', 'Наценка'].includes(headers[i])) {
+                            input.addEventListener('input', recalcPrices);
+                        }
+                    }
+                }
+                td.appendChild(input);
+
+            }
+            const onoffSelect = row.querySelector('select[name="Статус"]');
+            const stockInput = row.querySelector('input[name="Нал"]');
+            if (onoffSelect && stockInput) {
+                onoffSelect.addEventListener('change', function () {
+                    if (this.value === 'выкл.') {
+                        stockInput.value = '0';
+                        stockInput.disabled = true;
+                    } else {
+                        stockInput.disabled = false;
+                    }
+                });
+            }
+            // 🛡️ Деактивируем форму добавления товара, чтобы не сработал submit дважды
+            const addForm = document.querySelector('form[action^="/add"]');
+            if (addForm && addForm.parentNode) {
+                addForm.parentNode.removeChild(addForm);
+            }
+            // Создаём форму
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = `/update/${table}/${itemId}`;
+            const hiddenId = document.createElement('input');
+            hiddenId.type = 'hidden';
+            hiddenId.name = 'Арт_MC';
+            hiddenId.value = itemId;
+            form.appendChild(hiddenId);
+            form.style.display = 'inline';
+
+            // Поддержка ENTER → отправка формы
+            cells.forEach((td, i) => {
+                const input = td.querySelector('input');
+                if (!input) return;
+
+                input.addEventListener('keydown', function (event) {
+                    if (event.key === 'Enter') {
+                        event.preventDefault();
+                        form.requestSubmit();
+                    }
+                });
+            });
+
+            // Перехватываем submit: добавляем актуальные значения в момент отправки
+            form.addEventListener('submit', function (e) {
+                e.preventDefault();
+
+                let valid = true;
+                let invalidFields = [];
+
+                // 🔧 Удаляем старые hidden поля, чтобы не было дублей
+                form.querySelectorAll('input[type="hidden"]').forEach(el => el.remove());
+
+                for (let i = 0; i < headers.length; i++) {
+                    if (!headers[i] || headers[i] === '№') continue;
+
+                    const element = cells[i].querySelector('input, select');
+                    if (element) {
+                        const hidden = document.createElement('input');
+                        hidden.type = 'hidden';
+                        hidden.name = headers[i];
+                        let value = element.value.trim();
+
+                        if (numericFields.includes(headers[i])) {
+                            value = value.replace(/\s+/g, '').replace('р.', '').replace('%', '').trim();
+                            if (!value || !/^\d+$/.test(value)) {
+                                valid = false;
+                                invalidFields.push(headers[i]);
+                            }
+                        }
+
+                        hidden.value = value;
+                        form.appendChild(hidden);
+                    }
+                }
+
+                if (!valid) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Ошибка ввода',
+                        text: 'Поля: ' + invalidFields.join(', ') + ' должны содержать только цифры и не могут быть пустыми.',
+                    });
+                    return;
+                }
+
+                fetch(form.action, {
+                    method: 'POST',
+                    body: new FormData(form)
+                }).then(response => {
+                    if (response.ok) {
+                        Swal.fire({
+                            toast: true,
+                            position: 'top-end',
+                            icon: 'success',
+                            title: '✅ Сохранено',
+                            showConfirmButton: false,
+                            timer: 1500
+                        });
+                        setTimeout(() => location.reload(), 500);
+                    } else {
+                        Swal.fire('Ошибка', 'Не удалось сохранить товар', 'error');
+                    }
+                }).catch(error => {
+                    console.error('Ошибка при сохранении:', error);
+                    Swal.fire('Ошибка', 'Произошла ошибка при отправке данных', 'error');
+                });
+            });
+            const editBtn = row.querySelector('.edit-btn');
+            if (editBtn) {
+                const parentCell = editBtn.closest('td');
+
+                // Удаляем только кнопку ✏️
+                editBtn.remove();
+
+                // Создаем кнопку "галочка"
+                const saveBtn = document.createElement('button');
+                saveBtn.type = 'submit';
+                saveBtn.innerText = '✅';
+                saveBtn.title = 'Сохранить';
+                saveBtn.style = 'background:none; border:none; color:green; cursor:pointer; font-size:18px;';
+
+                // Добавляем кнопку в форму
+                form.appendChild(saveBtn);
+
+                // Вставляем форму на место, где была кнопка ✏️
+                parentCell.insertBefore(form, parentCell.firstChild);
+            }
+        });
+    });
+    </script>
+
+    <script>
+        // ⬇ Сохраняем scrollY перед перезагрузкой
+        window.addEventListener("beforeunload", function () {
+            localStorage.setItem("scrollY", window.scrollY);
+        });
+
+        // ⬆ Восстанавливаем scrollY после полной загрузки DOM
+        window.addEventListener("DOMContentLoaded", function () {
+            const y = localStorage.getItem("scrollY");
+            if (y !== null) {
+                setTimeout(() => {
+                    window.scrollTo(0, parseInt(y));
+                    localStorage.removeItem("scrollY");
+                }, 0); // отложим на 1 tick
+            }
+        });
+    </script>
+    <script>
+    document.addEventListener("DOMContentLoaded", function () {
+        const addForm = document.querySelector('form[action^="/add"]');
+        if (!addForm) return;
+
+        const requiredFields = ['Арт_MC', 'Поставщик', 'Артикул', 'Модель', 'Нал', 'Опт', 'Наценка'];
+
+        addForm.addEventListener("submit", function (e) {
+            const formData = new FormData(addForm);
+            let hasError = false;
+            let missingFields = [];
+            let invalidNumericFields = [];
+
+            requiredFields.forEach(field => {
+                const value = formData.get(field)?.trim();
+                if (!value) {
+                    hasError = true;
+                    missingFields.push(field);
+                } else if (['Нал', 'Опт', 'Наценка', 'Арт_MC', 'WB Barcode', 'WB Артикул'].includes(field) && !/^\d+$/.test(value)) {
+                    hasError = true;
+                    invalidNumericFields.push(field);
+                }
+            });
+
+            if (hasError) {
+                e.preventDefault();
+                let msg = '';
+                if (missingFields.length > 0) {
+                    msg += `Не заполнены поля: ${missingFields.join(', ')}.\n`;
+                }
+                if (invalidNumericFields.length > 0) {
+                    msg += `Поля ${invalidNumericFields.join(', ')} должны содержать только цифры.`;
+                }
+
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Ошибка при добавлении товара',
+                    text: msg,
+                });
+            }
+        });
+
+        // Блокируем буквы в числовых полях
+        ['Нал', 'Опт', 'Наценка', 'Арт_MC', 'WB Barcode', 'WB Артикул'].forEach(field => {
+            const input = addForm.querySelector(`input[name="${field}"]`);
+            if (input) {
+                input.addEventListener("input", function () {
+                    this.value = this.value.replace(/\D/g, '');
+                });
+            }
+        });
+    });
+    </script>
+
+    <script>
+    document.getElementById('manual-update-btn')?.addEventListener('click', function () {
+        const btn = this;
+        btn.textContent = "Обновление…";
+        btn.style.pointerEvents = "none";
+        btn.style.opacity = "0.6";
+
+        fetch('/run_update', {
+            method: 'GET',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => {
+            if (response.ok) {
+                location.reload();
+            } else {
+                alert("❌ Ошибка при обновлении склада.");
+                btn.textContent = "Обновить";
+                btn.style.pointerEvents = "";
+                btn.style.opacity = "";
+            }
+        })
+        .catch(err => {
+            console.error("Ошибка:", err);
+            alert("⚠ Не удалось обновить склад.");
+            btn.textContent = "Обновить";
+            btn.style.pointerEvents = "";
+            btn.style.opacity = "";
+        });
+    });
+    </script>
+    <script>
+    document.querySelectorAll('.global-toggle').forEach(input => {
+        input.addEventListener('change', function () {
+            const market = this.dataset.market;
+            fetch(`/toggle_stock/${market}`, {
+                method: 'POST'
+            }).then(() => {
+                location.reload();
+            }).catch(() => {
+                alert("❌ Ошибка переключения склада");
+            });
+        });
+    });
+    </script>
+    <script>
+    document.addEventListener("DOMContentLoaded", function () {
+        const rows = document.querySelectorAll("tbody tr");
+        const selectedTable = "{{ selected_table }}";
+        let color = "#fdf7b2";  // Yandex по умолчанию
+
+        if (selectedTable === "ozon") color = "#d5e4ff";
+        if (selectedTable === "wildberries") color = "#efc1ed";
+
+        rows.forEach(row => {
+            row.addEventListener("click", function () {
+                rows.forEach(r => r.classList.remove("highlighted"));  // убираем старое
+                this.classList.add("highlighted");
+                this.style.setProperty('--highlight-color', color);
+            });
+        });
+    });
+    </script>
+    <script>
+    document.addEventListener("DOMContentLoaded", function () {
+        document.querySelectorAll("td.text-left").forEach(td => {
+            if (td.scrollWidth > td.clientWidth) {
+                td.setAttribute("title", td.textContent.trim());
+            }
+        });
+    });
+    </script>
+
+    {% if request.args.get('duplicate') %}
+    <script>
+        Swal.fire({
+            icon: 'error',
+            title: 'Ошибка!',
+            text: '❌ Товар с таким Арт_MC или Артикул уже существует. Нужны уникальные значения.',
+            confirmButtonColor: '#007bff'
+        });
+    </script>
+    {% endif %}
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const input = document.getElementById("custom-search");
+  const clearBtn = document.getElementById("clear-search");
+  const form = input.closest("form");
+
+  if (!input || !clearBtn || !form) return;
+
+  const toggleClearBtn = () => {
+    if (input.value.trim()) {
+      clearBtn.style.display = "block";
+    } else {
+      clearBtn.style.display = "none";
+    }
+  };
+
+  // Показывать/скрывать крестик при вводе
+  input.addEventListener("input", toggleClearBtn);
+  toggleClearBtn(); // при загрузке страницы
+
+  // Клик по крестику — очистка и отправка
+  clearBtn.addEventListener("click", function () {
+    input.value = "";
+    toggleClearBtn();
+    form.submit();  // сброс фильтра
+  });
+
+  // Нажатие Enter — запуск поиска
+  input.addEventListener("keydown", function (event) {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      form.submit();
+    }
+  });
+});
+</script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    document.querySelectorAll(".letter-filter a").forEach(link => {
+        link.addEventListener("click", function (e) {
+            const currentLetter = new URLSearchParams(window.location.search).get("letter");
+            const thisLetter = this.textContent.trim();
+
+            if (currentLetter === thisLetter) {
+                e.preventDefault();
+                const url = new URL(window.location.href);
+                url.searchParams.delete("letter");
+                window.location.href = url.toString(); // ❌ снимаем фильтр
+            }
+        });
+    });
+});
+</script>
+
+</body>
+</html>

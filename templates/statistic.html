@@ -1,0 +1,113 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Статистика размещения</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='icons.png') }}">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0 auto;
+            padding: 20px;
+            max-width: 1000px;
+        }
+        h2 {
+            margin-bottom: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            margin-top: 20px;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        th, td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            text-align: center;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+            overflow: hidden;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .check {
+            color: green;
+            font-weight: bold;
+        }
+        .disabled-marker {
+            color: #cc0000;
+            font-weight: bold;
+            margin-left: 4px;
+            display: inline-block;
+            font-size: 16px;
+        }
+        th:first-child {
+            border-top-left-radius: 10px;
+        }
+        th:last-child {
+            border-top-right-radius: 10px;
+        }
+        tr:last-child td:first-child {
+            border-bottom-left-radius: 10px;
+        }
+        tr:last-child td:last-child {
+            border-bottom-right-radius: 10px;
+        }
+        .text-left {
+            text-align: left;
+        }
+    </style>
+</head>
+<body>
+<h2>Статистика размещения товаров по маркетплейсам</h2>
+
+<table>
+    <thead>
+        <tr>
+            <th>№</th>
+            <th>Арт_MC</th>
+            <th>Поставщик</th>
+            <th>Артикул</th>
+            <th class="text-left">Модель</th>
+            <th>Yandex</th>
+            <th>Ozon</th>
+            <th>Wildberries</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in stats_data %}
+        <tr>
+            <td>{{ loop.index }}</td>
+            <td>{{ row['Арт_MC'] }}</td>
+            <td>{{ row['Поставщик'] or '' }}</td>
+            <td>{{ row['Артикул'] or '' }}</td>
+            <td class="text-left">{{ row['Модель'] or '' }}</td>
+            <td>
+                {% if row['Yandex'] %}
+                    <span class="check">✔️</span>
+                    {% if row.get('Статус_Yandex') == 'выкл.' %}<span class="disabled-marker">-</span>{% endif %}
+                {% endif %}
+            </td>
+            <td>
+                {% if row['Ozon'] %}
+                    <span class="check">✔️</span>
+                    {% if row.get('Статус_Ozon') == 'выкл.' %}<span class="disabled-marker">-</span>{% endif %}
+                {% endif %}
+            </td>
+            <td>
+                {% if row['Wildberries'] %}
+                    <span class="check">✔️</span>
+                    {% if row.get('Статус_Wildberries') == 'выкл.' %}<span class="disabled-marker">-</span>{% endif %}
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+</body>
+</html>
