@@ -68,13 +68,29 @@ def update_stock(articul, platform):
         conn.close()
         return
 
+    def format_price(value):
+        try:
+            return f"{int(value):,}".replace(",", " ") + " р."
+        except (ValueError, TypeError):
+            return "—"
     row = df.iloc[0]
     model = row.get("Модель", "Неизвестно")
     stock = int(row.get("Нал", 0))
     supplier = row.get("Поставщик", "N/A")
+    opt_price = format_price(row.get("Опт"))
+    artikul_alt = row.get("Артикул", "")
+
+    # Получаем нужную цену в зависимости от платформы
+    price_field_map = {
+        'yandex': 'Цена YM',
+        'ozon': 'Цена OZ',
+        'wildberries': 'Цена WB'
+    }
+    rrc_field = price_field_map.get(table)
+    rrc_price = format_price(row.get(rrc_field))
+
 
     if supplier.lower() == 'sklad':
-        logger.warning(f"❗ Артикул {articul} не найден на складе Google Sheets.")
         gc = gspread.service_account(filename='System/my-python-397519-3688db4697d6.json')
         sh = gc.open("КАЗНА")
         worksheet = sh.worksheet("СКЛАД")
@@ -99,7 +115,8 @@ def update_stock(articul, platform):
         message = (
             f"✅ Бот вычел со склада\n\n"
             f"Товар: \"{model}\"\n"
-            f"Артикул: {articul}\n"
+            f"Артикул: *{articul}*\n"
+            f"Опт: {opt_price}, РРЦ: {rrc_price}\n"
             f"Было: {prev_q}, стало: {new_q}.\n"
             f"Склад: {supplier}"
         )
@@ -109,17 +126,47 @@ def update_stock(articul, platform):
         cur.execute(f"UPDATE '{table}' SET Нал = ? WHERE Арт_MC = ?", (new_stock, articul))
         conn.commit()
         logger.success(f"✅ Остаток обновлён: {articul} | {stock} → {new_stock}")
+        # 🔄 Дополнительное вычитание из базы !YMWB.db
+        try:
+            alt_db_path = "System/!YMWB.db"
+            alt_conn = sqlite3.connect(alt_db_path, timeout=10)
+            alt_cur = alt_conn.cursor()
+
+            # Поиск всех строк с этим артикулом
+            alt_df = pd.read_sql_query("SELECT rowid, * FROM prices WHERE Артикул = ?", alt_conn, params=(artikul_alt,))
+            if not alt_df.empty:
+                for _, alt_row in alt_df.iterrows():
+                    rowid = alt_row["rowid"]
+                    current_qty = int(alt_row.get("Наличие", 0))
+                    updated_qty = max(0, current_qty - 1)
+
+                    alt_cur.execute(
+                        "UPDATE prices SET Наличие = ? WHERE rowid = ?",
+                        (updated_qty, rowid)
+                    )
+                    logger.debug(f"🔧 YMWB: {artikul_alt} | {current_qty} → {updated_qty}")
+
+                alt_conn.commit()
+            else:
+                logger.warning(f"❗ Артикул {artikul_alt} не найден в !YMWB.db")
+
+        except Exception as e:
+            logger.error(f"❌ Ошибка при обновлении !YMWB.db: {e}")
+
+        finally:
+            alt_conn.close()
 
         message = (
             f"✅ Бот вычел со склада\n\n"
             f"Товар: \"{model}\"\n"
-            f"Артикул: {articul}\n"
+            f"Артикул: *{articul}*\n"
+            f"Опт: {opt_price}, РРЦ: {rrc_price}\n"
             f"Было: {stock}, стало: {new_stock}.\n"
             f"Склад: {supplier}"
         )
 
     conn.close()
-    telegram.notify(token=telegram_got_token, chat_id=telegram_chat_id, message=message)
+    telegram.notify(token=telegram_got_token, chat_id=telegram_chat_id, message=message, parse_mode='markdown')
 
 
 def get_orders_yandex_market():
@@ -129,7 +176,7 @@ def get_orders_yandex_market():
     url_ym = f'https://api.partner.market.yandex.ru/campaigns/{campaign_id}/orders'
     headers = {"Authorization": f"Bearer {ym_token}"}
     params = {
-        "fake": "false",
+        "fake": "true",
         "status": "PROCESSING",
         "substatus": "STARTED"
     }
