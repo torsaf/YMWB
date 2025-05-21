@@ -80,8 +80,8 @@ def get_last_download_time():
 def update_sklad_task():
     try:
         logger.success("🔁 Обновление склада через update_sklad.py...")
+        update(global_stock_flags)
         df = gen_sklad()
-        print(df)
         update_sklad_db(df)
         # сохраняем дату
         with open(LAST_UPDATE_FILE, "w") as f:

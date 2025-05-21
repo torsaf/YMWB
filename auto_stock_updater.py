@@ -61,9 +61,33 @@ def update(flags):
             elif key in source_dict:
                 stock, opt = source_dict[key]
                 logger.debug(f"✅ Обновление {table} | {supplier} | {article} → stock={stock}, opt={opt}")
+                # Получим наценку
+                target_cursor.execute(f"SELECT Наценка FROM '{table}' WHERE rowid = ?", (rowid,))
+                markup_result = target_cursor.fetchone()
+                try:
+                    markup = float(str(markup_result[0]).replace('%', '').replace(' ', '')) if markup_result and \
+                                                                                               markup_result[0] else 0.0
+                except:
+                    markup = 0.0
+
+                # Пересчитаем цену
+                try:
+                    price = round((float(opt) + float(opt) * markup / 100) / 100.0) * 100
+                except:
+                    price = opt
+
+                # Подготовим словарь: в какую колонку писать цену
+                price_column = {
+                    'yandex': 'Цена YM',
+                    'ozon': 'Цена OZ',
+                    'wildberries': 'Цена WB'
+                }.get(table, 'Цена YM')
+
+                # Обновляем всё: Нал, Опт, Цена
                 target_cursor.execute(f"""
-                    UPDATE "{table}" SET "Нал" = ?, "Опт" = ? WHERE rowid = ?
-                """, (stock, opt, rowid))
+                    UPDATE "{table}" SET "Нал" = ?, "Опт" = ?, "{price_column}" = ? WHERE rowid = ?
+                """, (stock, opt, price, rowid))
+
             else:
                 if supplier != "Sklad":
                     logger.debug(f"❓ {table} | {supplier} | {article} не найден в источнике — stock = 0")
