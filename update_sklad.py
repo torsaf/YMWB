@@ -116,11 +116,34 @@ def update_sklad_db(sklad_df):
                 elif art_mc_str in sklad_dict:
                     nal, opt = sklad_dict[art_mc_str]
                     logger.debug(f"✅ {table} | {art_mc_str} обновлён → stock = {nal}, opt = {opt}")
+                    cursor.execute(f"SELECT Наценка FROM '{table}' WHERE rowid = ?", (rowid,))
+                    markup_result = cursor.fetchone()
+                    try:
+                        markup = float(str(markup_result[0]).replace('%', '').replace(' ', '')) if markup_result and \
+                                                                                                   markup_result[
+                                                                                                       0] else 0.0
+                    except:
+                        markup = 0.0
+
+                    # пересчитаем цену
+                    try:
+                        price = round((opt + opt * markup / 100) / 100.0) * 100
+                    except:
+                        price = opt
+
+                    # определим колонку для цены
+                    price_column = {
+                        "yandex": "Цена YM",
+                        "ozon": "Цена OZ",
+                        "wildberries": "Цена WB"
+                    }.get(table, "Цена YM")
+
+                    # обновим также цену
                     cursor.execute(f"""
                         UPDATE "{table}"
-                        SET "Нал" = ?, "Опт" = ?
+                        SET "Нал" = ?, "Опт" = ?, "{price_column}" = ?
                         WHERE rowid = ?
-                    """, (nal, opt, rowid))
+                    """, (nal, opt, price, rowid))
                 else:
                     logger.debug(f"❓ {table} | {art_mc_str} не найден в складе — stock = 0")
                     cursor.execute(f"""
@@ -136,3 +159,4 @@ def update_sklad_db(sklad_df):
     logger.success("✅ Обновление остатков со склада завершено")
 
 
+gen_sklad()
