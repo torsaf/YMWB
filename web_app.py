@@ -16,6 +16,9 @@ import json
 import sqlite3
 import shutil
 import glob
+from flask import send_file
+from io import BytesIO
+from unlisted import generate_unlisted
 
 last_download_time = None
 LAST_UPDATE_FILE = "System/last_update.txt"
@@ -571,6 +574,31 @@ def show_statistic():
 def handle_error(e):
     logger.exception(f"💥 Ошибка: {str(e)}")
     return "Произошла ошибка на сервере", 500
+
+@app.route('/download_unlisted')
+def download_unlisted():
+    try:
+        df = generate_unlisted()
+        if df.empty:
+            logger.info("📄 Файл not_listed.xlsx не сформирован: пустой DataFrame.")
+            return Response("Нет данных для выгрузки", status=400)
+
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            df.to_excel(writer, index=False, sheet_name='Невыложенные товары')
+        output.seek(0)
+
+        logger.info("✅ Файл not_listed.xlsx успешно сформирован и отправлен пользователю.")
+        return send_file(
+            output,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name='not_listed.xlsx'
+        )
+
+    except Exception as e:
+        logger.error(f"❌ Ошибка при генерации файла not_listed.xlsx: {e}", exc_info=True)
+        return Response("Ошибка сервера при формировании Excel-файла.", status=500)
 
 
 if __name__ == '__main__':

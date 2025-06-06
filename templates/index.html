@@ -420,8 +420,9 @@
         display: flex;
         justify-content: flex-start;
         align-items: flex-start;
-        gap: 60px;  /* ✅ равномерное расстояние между всеми блоками */
+        gap: 45px;
         flex-wrap: wrap;
+        margin-bottom: 0px;
     ">
       <!-- Блоки "Sklad обновлен" и статистика -->
       <div style="display: flex; gap: 30px; align-items: flex-start;">
@@ -453,7 +454,8 @@
         {% endif %}
       </div>
       <!-- Правый блок с выключателями -->
-      <div class="nav" style="display: flex; gap: 6px; align-items: center; margin-top: 19px;">
+      <div class="nav" style="display: flex; gap: 0px; align-items: center; margin-top: 0;">
+
         <a href="/table/yandex" class="{% if selected_table == 'yandex' %}active yandex{% endif %}">Yandex</a>
         <a href="/table/ozon" class="{% if selected_table == 'ozon' %}active ozon{% endif %}">Ozon</a>
         <a href="/table/wildberries" class="{% if selected_table == 'wildberries' %}active wildberries{% endif %}">Wildberries</a>
@@ -487,10 +489,19 @@
 
 
         <!-- Блок поиска + алфавит -->
-        <div style="display: flex; align-items: center; gap: 100px; flex-wrap: wrap; margin-top: -55px;">
+        <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 12px; margin-top: -25px; margin-bottom: 10px; width: 100%;">
+            <!-- Кнопка NEW -->
+            <a href="/download_unlisted"
+               style="padding: 6px 12px; font-size: 15px;
+                      border-radius: 6px; border: 1px solid #ccc;
+                      background-color: #c4f1be; color: #000;
+                      text-decoration: none; transition: all 0.2s;
+                      width: 140px; display: inline-block; text-align: center;">
+              Новые товары
+            </a>
 
           <!-- Поисковая форма -->
-          <form method="GET" action="/table/{{ selected_table }}" style="display: flex; align-items: center; gap: 10px; margin-left: 60px;">
+            <form method="GET" action="/table/{{ selected_table }}" style="display: flex; align-items: center; gap: 10px; margin-left: 10px;">
             <div style="position: relative;">
               <input type="search" id="custom-search" name="search"
                      placeholder="Поиск: Арт_MC, Поставщик, Модель"
@@ -856,6 +867,8 @@
                     return;
                 }
 
+                // 🧠 Сохраняем scrollY и Арт_MC
+                localStorage.setItem("highlight_art", itemId);
                 fetch(form.action, {
                     method: 'POST',
                     body: new FormData(form)
@@ -903,21 +916,68 @@
     </script>
 
     <script>
-        // ⬇ Сохраняем scrollY перед перезагрузкой
-        window.addEventListener("beforeunload", function () {
-            localStorage.setItem("scrollY", window.scrollY);
-        });
+    window.addEventListener("DOMContentLoaded", function () {
+        const y = localStorage.getItem("scrollY");
+        const urlParams = new URLSearchParams(window.location.search);
+        const hasSearchOrFilter = urlParams.has("search") || urlParams.has("letter");
+        const highlightId = hasSearchOrFilter ? null : localStorage.getItem("highlight_art");
+        const selectedTable = "{{ selected_table }}";
 
-        // ⬆ Восстанавливаем scrollY после полной загрузки DOM
-        window.addEventListener("DOMContentLoaded", function () {
-            const y = localStorage.getItem("scrollY");
-            if (y !== null) {
-                setTimeout(() => {
-                    window.scrollTo(0, parseInt(y));
-                    localStorage.removeItem("scrollY");
-                }, 0); // отложим на 1 tick
-            }
-        });
+        const highlightColors = {
+            yandex: "#fdf7b2",
+            ozon: "#d5e4ff",
+            wildberries: "#efc1ed"
+        };
+
+        if (highlightId) {
+            const tryScrollToRow = () => {
+                const rows = document.querySelectorAll("tbody tr");
+                const headers = {{ table_data.columns.tolist() | tojson }};
+                const artIndex = headers.indexOf("Арт_MC");
+
+                for (const row of rows) {
+                    const cells = row.querySelectorAll("td");
+                    const artValue = cells[artIndex]?.innerText.trim();
+                    if (artValue === highlightId) {
+                        row.classList.add("highlighted");
+                        row.style.setProperty('--highlight-color', highlightColors[selectedTable] || "#fdf7b2");
+
+                        // Прокрутка к строке
+                        row.scrollIntoView({ behavior: "auto", block: "center" });
+                        return true;
+                    }
+                }
+                return false;
+            };
+
+            // ⏳ Пробуем ждать появления строки с интервалами
+            let attempts = 0;
+            const maxAttempts = 20;
+            const interval = setInterval(() => {
+                if (tryScrollToRow() || attempts++ > maxAttempts) {
+                    clearInterval(interval);
+                }
+            }, 100);
+        }
+
+        if (highlightId) {
+            const rows = document.querySelectorAll("tbody tr");
+            const headers = {{ table_data.columns.tolist() | tojson }};
+            const artIndex = headers.indexOf("Арт_MC");
+
+            rows.forEach(row => {
+                const cells = row.querySelectorAll("td");
+                const artValue = cells[artIndex]?.innerText.trim();
+                if (artValue === highlightId) {
+                    row.classList.add("highlighted");
+                    row.style.setProperty('--highlight-color', highlightColors[selectedTable] || "#fdf7b2");
+                }
+            });
+
+            // НЕ удаляем highlight_art — оставляем для будущих перезагрузок
+            // localStorage.removeItem("highlight_art");
+        }
+    });
     </script>
     <script>
     document.addEventListener("DOMContentLoaded", function () {
@@ -1023,16 +1083,35 @@
     document.addEventListener("DOMContentLoaded", function () {
         const rows = document.querySelectorAll("tbody tr");
         const selectedTable = "{{ selected_table }}";
-        let color = "#fdf7b2";  // Yandex по умолчанию
 
+        let color = "#fdf7b2";  // Yandex по умолчанию
         if (selectedTable === "ozon") color = "#d5e4ff";
         if (selectedTable === "wildberries") color = "#efc1ed";
 
+        const headers = {{ table_data.columns.tolist() | tojson }};
+        const artIndex = headers.indexOf("Арт_MC");
+
         rows.forEach(row => {
             row.addEventListener("click", function () {
-                rows.forEach(r => r.classList.remove("highlighted"));  // убираем старое
-                this.classList.add("highlighted");
-                this.style.setProperty('--highlight-color', color);
+                const cells = this.querySelectorAll("td");
+                const artValue = cells[artIndex]?.innerText.trim();
+                const isHighlighted = this.classList.contains("highlighted");
+
+                // Снимаем выделение со всех
+                rows.forEach(r => r.classList.remove("highlighted"));
+
+                if (!isHighlighted) {
+                    // Выделяем текущую
+                    this.classList.add("highlighted");
+                    this.style.setProperty('--highlight-color', color);
+
+                    if (artValue) {
+                        localStorage.setItem("highlight_art", artValue);
+                    }
+                } else {
+                    // Повторный клик — снимаем выделение
+                    localStorage.removeItem("highlight_art");
+                }
             });
         });
     });
@@ -1111,6 +1190,88 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 });
 </script>
+<script>
+  // сохраняем scrollY перед уходом со страницы
+  window.addEventListener("beforeunload", function () {
+      localStorage.setItem("scrollY", window.scrollY);
+  });
+
+  // восстанавливаем scrollY после загрузки
+  window.addEventListener("DOMContentLoaded", function () {
+      const savedScrollY = localStorage.getItem("scrollY");
+      if (savedScrollY !== null) {
+          window.scrollTo(0, parseInt(savedScrollY));
+          localStorage.removeItem("scrollY");  // очищаем после использования
+      }
+  });
+</script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    document.querySelectorAll("thead th a").forEach(link => {
+        link.addEventListener("click", function () {
+            // При сортировке — очищаем подсветку
+            localStorage.removeItem("highlight_art");
+        });
+    });
+});
+</script>
+
+<script>
+document.getElementById('run-unlisted-btn')?.addEventListener('click', function () {
+    const btn = this;
+    btn.disabled = true;
+
+    fetch('/run_unlisted')
+        .then(response => {
+            if (response.ok) {
+                showCustomAlert("Файл успешно создан: not_listed.xlsx");
+            } else {
+                showCustomAlert("Ошибка при создании файла", true);
+            }
+        })
+        .catch(err => {
+            console.error("Ошибка:", err);
+            showCustomAlert("Произошла ошибка при создании файла", true);
+        })
+        .finally(() => {
+            btn.disabled = false;
+        });
+});
+
+function showCustomAlert(message, isError = false) {
+    const alertBox = document.getElementById('custom-alert');
+    alertBox.textContent = message;
+    alertBox.style.backgroundColor = isError ? '#f8d7da' : '#d4edda';
+    alertBox.style.color = isError ? '#721c24' : '#155724';
+    alertBox.style.borderColor = isError ? '#f5c6cb' : '#c3e6cb';
+    alertBox.style.display = 'block';
+
+    setTimeout(() => {
+        alertBox.style.display = 'none';
+    }, 3000);
+}
+</script>
+
+<!-- Кастомное уведомление -->
+<div id="custom-alert" style="
+    display: none;
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: #d4edda;
+    color: #155724;
+    padding: 12px 20px;
+    border: 1px solid #c3e6cb;
+    border-radius: 5px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    z-index: 9999;
+    font-size: 16px;
+    pointer-events: none;
+    width: fit-content;
+">
+    Файл успешно создан!
+</div>
 
 </body>
 </html>
