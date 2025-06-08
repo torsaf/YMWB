@@ -120,6 +120,15 @@ def update_ozon():
         logger.info(f"📡 Ozon API: {response.status_code}")
         if response.status_code != 200:
             logger.warning(f"⚠ Ответ от Ozon API: {response.text}")
+
+            # Исключение для ошибки 429 в 50 или 55 минут
+            if response.status_code == 429 and (
+                    "limit exceeded" in response.text or "ResourceExhausted" in response.text):
+                from datetime import datetime
+                now_minute = datetime.now().minute
+                if now_minute in (50, 55):
+                    logger.info("⏳ Ошибка 429 пропущена для Ozon в разрешённое время")
+                    return
             raise Exception(f"Ozon: Статус-код {response.status_code}, Ответ: {response.text}")
         logger.success("✅ Цены Ozon успешно обновлены")
 
