@@ -9,14 +9,16 @@ from functools import wraps
 from dotenv import load_dotenv
 import os
 import requests
-from loguru import logger
+from logger_config import logger, LOG_DIR
 from pathlib import Path
 from datetime import timedelta
+import stock
 import json
 import sqlite3
 import shutil
 import glob
 from flask import send_file
+from copy import deepcopy
 from io import BytesIO
 from unlisted import generate_unlisted
 
@@ -31,22 +33,12 @@ global_stock_flags = {
     "wildberries": True
 }
 
-# 📝 ЛОГИРОВАНИЕ
-LOG_DIR = Path("System/logs")
-LOG_DIR.mkdir(parents=True, exist_ok=True)
-
-logger.remove()
-logger.add(
-    LOG_DIR / "app_{time:YYYY-MM-DD}.log",
-    rotation="5 MB",
-    retention="7 days",
-    compression="zip",
-    encoding="utf-8",
-    enqueue=True,
-    backtrace=True,
-    diagnose=True,
-    level="DEBUG"
-)
+def send_telegram_message(message: str):
+    stock.telegram.notify(
+        token=stock.telegram_got_token_error,
+        chat_id=stock.telegram_chat_id_error,
+        message=message
+    )
 
 
 def backup_database():
@@ -99,9 +91,17 @@ def update_sklad_task():
 def load_stock_flags():
     try:
         with open(FLAGS_PATH, 'r') as f:
-            return json.load(f)
+            flags = json.load(f)
+            if "suppliers" not in flags:
+                flags["suppliers"] = {}
+            return flags
     except Exception:
-        return {"yandex": True, "ozon": True, "wildberries": True}
+        return {
+            "yandex": True,
+            "ozon": True,
+            "wildberries": True,
+            "suppliers": {}
+        }
 
 
 global_stock_flags = load_stock_flags()
@@ -274,6 +274,66 @@ def login():
         </html>
         '''
 
+@app.route('/toggle_supplier/<supplier>', methods=['POST'])
+def toggle_supplier(supplier):
+    global_stock_flags["suppliers"][supplier] = not global_stock_flags["suppliers"].get(supplier, True)
+
+    with open(FLAGS_PATH, 'w') as f:
+        json.dump(global_stock_flags, f)
+
+    logger.info(f"🔁 Поставщик {supplier} переключён: {'ON' if global_stock_flags['suppliers'][supplier] else 'OFF'}")
+
+    # Подключение к основным и временным базам
+    conn_main = sqlite3.connect(DB_PATH)
+    conn_temp = sqlite3.connect("System/temp_stock_backup.db")
+    cursor_main = conn_main.cursor()
+    cursor_temp = conn_temp.cursor()
+
+    for market in ['yandex', 'ozon', 'wildberries']:
+        table_backup = f"backup_supplier_{supplier}_{market}"
+
+        try:
+            cursor_main.execute(f"SELECT Арт_MC, Нал FROM '{market}' WHERE Поставщик = ?", (supplier,))
+            rows = cursor_main.fetchall()
+
+            if not global_stock_flags["suppliers"][supplier]:
+                # Создать временную таблицу, если нет
+                cursor_temp.execute(f"""
+                    CREATE TABLE IF NOT EXISTS {table_backup} (
+                        Арт_MC TEXT PRIMARY KEY,
+                        Нал INTEGER
+                    )
+                """)
+                # Очистить перед вставкой (перезапись)
+                cursor_temp.execute(f"DELETE FROM {table_backup}")
+
+                # Сохранить остатки и обнулить
+                for art, nal in rows:
+                    cursor_temp.execute(f"""
+                        INSERT INTO {table_backup} (Арт_MC, Нал) VALUES (?, ?)
+                    """, (art, nal))
+                cursor_main.execute(f"""
+                    UPDATE '{market}' SET Нал = 0 WHERE Поставщик = ?
+                """, (supplier,))
+            else:
+                for art, _ in rows:
+                    cursor_temp.execute(f"SELECT Нал FROM {table_backup} WHERE Арт_MC = ?", (art,))
+                    res = cursor_temp.fetchone()
+                    if res:
+                        nal = res[0]
+                        cursor_main.execute(f"""
+                            UPDATE '{market}' SET Нал = ? WHERE Арт_MC = ?
+                        """, (nal, art))
+                        cursor_temp.execute(f"DELETE FROM {table_backup} WHERE Арт_MC = ?", (art,))
+        except Exception as e:
+            logger.warning(f"❌ Ошибка обработки {supplier} в {market}: {e}")
+
+    conn_main.commit()
+    conn_temp.commit()
+    conn_main.close()
+    conn_temp.close()
+
+    return '', 204
 
 @app.route('/')
 @requires_auth
@@ -374,6 +434,17 @@ def show_table(table_name):
         'Средняя наценка': f'{avg_markup} %'
     }
 
+    # 📌 Получаем список всех уникальных поставщиков (фиксированный список, не зависит от df)
+    conn_sup = sqlite3.connect(DB_PATH)
+    try:
+        supplier_df = pd.read_sql_query("SELECT DISTINCT Поставщик FROM yandex", conn_sup)
+        suppliers_list = sorted(s for s in supplier_df['Поставщик'].dropna().unique() if s.strip())
+    except Exception:
+        suppliers_list = []
+    conn_sup.close()
+
+    saved_form_data = session.pop('saved_form', {})
+
     return render_template(
         "index.html",
         tables=tables,
@@ -381,10 +452,12 @@ def show_table(table_name):
         selected_table=table_name,
         sort_column=sort_column,
         sort_order=sort_order,
-        zip=zip,  # <- вот это добавляет zip в шаблон
+        zip=zip,
         stats=stats,
         last_download_time=last_download_time,
-        global_stock_flags=global_stock_flags
+        global_stock_flags=global_stock_flags,
+        saved_form_data=saved_form_data,
+        suppliers_list=suppliers_list
     )
 
 
@@ -392,32 +465,85 @@ def show_table(table_name):
 def delete_row(table, item_id):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
+
+    # Получаем модель и Арт_MC до удаления
+    cursor.execute(f"SELECT Модель, Арт_MC FROM '{table}' WHERE Артикул = ?", (item_id,))
+    result = cursor.fetchone()
+    model, art_mc = result if result else ("", "")
+
     cursor.execute(f"DELETE FROM '{table}' WHERE Артикул = ?", (item_id,))
     conn.commit()
     conn.close()
-    logger.info(f"🗑 Удалён товар {item_id} из таблицы {table}")
-    return redirect(url_for('show_table', table_name=table))
+
+    # Отправляем уведомление
+    send_telegram_message(f"🗑 Удалён из {table.upper()}:\n{model} / {art_mc}")
+    logger.warning(f"🗑 Удалён товар из {table.upper()}: {model} / {art_mc}")
+
+    return redirect(url_for('show_table', table_name=table, search=''))
 
 
 @app.route('/update/<table>/<item_id>', methods=['POST'])
 def update_row(table, item_id):
     data = request.form.to_dict()
+    # Получаем старые данные для сравнения
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(f"SELECT * FROM '{table}' WHERE \"Арт_MC\" = ?", (item_id,))
+    row = cursor.fetchone()
+    column_names = [description[0] for description in cursor.description]
+    old_data = dict(zip(column_names, row)) if row else {}
+
+    if not old_data:
+        conn.close()
+        logger.warning(f"⚠️ Товар с Арт_MC = {item_id} не найден.")
+        return '', 400
+
     if not global_stock_flags.get(table, True):
         logger.info(f"⚙️ Редактирование товара в выключенном маркетплейсе: {table}")
-        # Удаляем 'Нал', чтобы не перезаписывать
-        if 'Нал' in data:
-            del data['Нал']
-    logger.debug("📥 Получены данные формы: {}", data)
-    # если товар выключен, наличие всегда 0
-    if data.get('Статус', '').strip() == 'выкл.':
-        data['Нал'] = '0'
-    elif not global_stock_flags.get(table, True):
-        # при выключенном флаге игнорируем Нал
         if 'Нал' in data:
             del data['Нал']
 
-    if "Арт_MC" in data:
-        del data["Арт_MC"]
+    model = old_data.get("Модель", "—")
+    opt_old = int(old_data.get("Опт", 0))
+    stock_old = int(old_data.get("Нал", 0))
+    price_old = 0
+
+    table_price_column = {
+        "yandex": "Цена YM",
+        "ozon": "Цена OZ",
+        "wildberries": "Цена WB"
+    }.get(table, "Цена YM")
+
+    try:
+        price_old = int(old_data.get(table_price_column, 0))
+    except:
+        price_old = 0
+
+    try:
+        stock_new = int(data.get("Нал", 0))
+        opt_new = int(data.get("Опт", 0))
+        markup = float(data.get("Наценка", "0").replace('%', '').replace(' ', ''))
+        price_new = round((opt_new + opt_new * markup / 100) / 100.0) * 100
+    except Exception as e:
+        logger.warning(f"❌ Ошибка при парсинге чисел: {e}")
+        stock_new, opt_new, price_new = stock_old, opt_old, price_old
+
+    if (stock_old != stock_new) or (opt_old != opt_new) or (price_old != price_new):
+        logger.debug(
+            f"✅ {table} | {item_id} ({model}) → "
+            f"stock: {stock_old} → {stock_new}, "
+            f"opt: {opt_old} → {opt_new}, "
+            f"price: {price_old} → {price_new}"
+        )
+    # Принудительное обнуление "Нал", если статус "выкл."
+    if data.get('Статус', '').strip() == 'выкл.':
+        data['Нал'] = '0'
+    elif not global_stock_flags.get(table, True):
+        if 'Нал' in data:
+            del data['Нал']
+
+    # Удалить Арт_MC из обновляемых данных
+    data.pop("Арт_MC", None)
 
     try:
         opt = float(data.get('Опт', '0').replace(' ', '').replace('р.', ''))
@@ -426,14 +552,13 @@ def update_row(table, item_id):
         price = int(round(raw_price / 100.0) * 100)
         formatted_price = str(price)
 
-        # Загружаем список колонок таблицы
+        # Получаем список колонок таблицы
         conn_check = sqlite3.connect(DB_PATH)
         cur_check = conn_check.cursor()
         cur_check.execute(f"PRAGMA table_info('{table}')")
         table_columns = [col[1] for col in cur_check.fetchall()]
         conn_check.close()
 
-        # Добавляем пересчитанные цены, если такие колонки есть
         for col in ['Цена YM', 'Цена OZ', 'Цена WB']:
             if col in table_columns:
                 data[col] = formatted_price
@@ -441,65 +566,124 @@ def update_row(table, item_id):
         if 'Наценка' in data:
             data['Наценка'] = str(int(markup))
 
-
     except ValueError:
         logger.warning("❌ Невалидные данные в Опт/Наценка для пересчёта цены.")
 
+    # Ключевые поля, которые влияют на "Дата изменения"
+    important_fields = [
+        "Поставщик", "Артикул", "Модель", "Статус", "Нал", "Опт", "Наценка", "Комментарий",
+        "Цена YM", "Цена OZ", "Цена WB", "WB Артикул", "WB Barcode"
+    ]
+
+    # Подготовка к сравнению
+    changed = False
+    for field in important_fields:
+        old_val = str(old_data.get(field, "")).strip()
+        new_val = str(data.get(field, "")).strip()
+        if field == "Нал" and old_data.get("Статус", "").strip() == "выкл." and old_val == "0" and new_val != old_val:
+            # Разрешаем отличия в Нал, если товар выключен и Нал=0 — не считаем изменением
+            new_val = "0"
+        if old_val != new_val:
+            changed = True
+            break
+
+    if changed:
+        data["Дата изменения"] = datetime.now().strftime("%d.%m.%Y %H:%M")
+
     columns = list(data.keys())
     values = list(data.values())
-
     update_clause = ", ".join([f'"{col}" = ?' for col in columns])
-    logger.debug("🧩 SQL запрос:", f"UPDATE '{table}' SET {update_clause} WHERE \"Арт_MC\" = ?")
+
+    logger.debug(f"🧩 SQL запрос: UPDATE '{table}' SET {update_clause} WHERE \"Арт_MC\" = ?")
 
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     try:
-        cursor.execute(f"UPDATE '{table}' SET {update_clause} WHERE \"Арт_MC\" = ?", values + [item_id])
+        cursor.execute(
+            f"UPDATE '{table}' SET {update_clause} WHERE \"Арт_MC\" = ?",
+            values + [item_id]
+        )
         conn.commit()
         logger.debug(f"🧾 Кол-во обновлённых строк: {cursor.rowcount}")
         logger.success("✅ Успешно обновлено!")
+
+        # 🔍 Проверяем смену статуса
+        cursor.execute(f"SELECT Статус, Модель FROM '{table}' WHERE Арт_MC = ?", (item_id,))
+        row = cursor.fetchone()
+        if row:
+            new_status, model = row
+            old_status = old_data.get("Статус", "").strip().lower()
+            new_status = (new_status or "").strip().lower()
+            if old_status != new_status:
+                action = "🔴 ОТКЛЮЧЕН" if new_status == "выкл." else "🟢 ВКЛЮЧЕН"
+                logger.info(f"{action}: {model} ({item_id}) в таблице {table.upper()}")
+
     except Exception as e:
-        logger.success("❌ Ошибка при обновлении:", e)
+        logger.exception("❌ Ошибка при обновлении:")
     finally:
         conn.close()
 
-    return '', 204  # No Content — ничего не перезагружаем
+    return '', 204
+
+
+@app.route('/download_log')
+def download_log():
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    log_file_path = LOG_DIR / "app.log"
+
+    if not log_file_path.exists():
+        logger.warning("📁 Файл лога не найден для загрузки.")
+        return "Файл лога не найден", 404
+
+    return send_file(log_file_path, as_attachment=True)
 
 
 @app.route('/add/<table_name>', methods=['POST'])
 def add_item(table_name):
+    from datetime import datetime
     data = request.form.to_dict()
+
     if 'Комментарий' in data and data['Комментарий'] is None:
         data['Комментарий'] = data.get('Комментарий') or ''
+
     if not global_stock_flags.get(table_name, True):
         logger.warning(f"⛔ Попытка добавления товара в выключенный маркетплейс: {table_name}")
         return redirect(url_for('show_table', table_name=table_name))
-    logger.success("➕ Добавление товара:", data)
 
     art_mc = data.get('Арт_MC', '').strip()
     artikul = data.get('Артикул', '').strip()
 
     if not art_mc or not artikul:
-        logger.success("❌ Не указан Арт_MC или Артикул.")
+        logger.warning("❌ Не указан Арт_MC или Артикул.")
         return redirect(url_for('show_table', table_name=table_name))
 
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
-    # Проверка на дубликат Арт_MC или Артикул
-    cursor.execute(f"SELECT COUNT(*) FROM '{table_name}' WHERE Арт_MC = ? OR Артикул = ?", (art_mc, artikul))
+    model = data.get('Модель', '').strip()
+    wb_barcode = data.get('WB Barcode', '').strip()
+    wb_artikul = data.get('WB Артикул', '').strip()
+
+    cursor.execute(f"""
+        SELECT COUNT(*) FROM '{table_name}'
+        WHERE Арт_MC = ?
+           OR Артикул = ?
+           OR Модель = ?
+           OR "WB Barcode" = ?
+           OR "WB Артикул" = ?
+    """, (art_mc, artikul, model, wb_barcode, wb_artikul))
     existing_count = cursor.fetchone()[0]
+
     if existing_count > 0:
         conn.close()
-        logger.warning("⚠️ Товар с таким Арт_MC уже существует.")
+        logger.warning("⚠️ Товар с таким Арт_MC, Артикул, Модель, WB Barcode или WB Артикул уже существует.")
+        session['saved_form'] = data
         return redirect(url_for('show_table', table_name=table_name, duplicate='1'))
 
     try:
-        # Обработка и вставка (оставить твою логику подсчёта цен и т.д.)
         opt = float(data.get('Опт', '').replace(' ', '').replace('р.', ''))
         markup = float(data.get('Наценка', '').replace('%', '').replace(' ', ''))
         stock = int(data.get('Нал', '').replace(' ', ''))
-        # если товар выключен, наличие всегда 0
         if data.get('Статус', '').strip() == 'выкл.':
             stock = 0
 
@@ -511,14 +695,17 @@ def add_item(table_name):
         data['Нал'] = str(stock)
 
         cursor.execute(f"PRAGMA table_info('{table_name}')")
-        columns_info = cursor.fetchall()
-        table_columns = [col[1] for col in columns_info]
+        table_columns = [col[1] for col in cursor.fetchall()]
+
         if 'Цена YM' in table_columns:
             data['Цена YM'] = str(price_ym)
         if 'Цена OZ' in table_columns:
             data['Цена OZ'] = str(price_ym)
         if 'Цена WB' in table_columns:
             data['Цена WB'] = str(price_ym)
+
+        # Устанавливаем дату изменения только перед вставкой
+        data["Дата изменения"] = datetime.now().strftime("%d.%m.%Y %H:%M")
 
         columns = list(data.keys())
         values = [data[col] for col in columns]
@@ -528,14 +715,17 @@ def add_item(table_name):
 
         cursor.execute(insert_query, values)
         conn.commit()
-        logger.success("✅ Товар добавлен.")
+        send_telegram_message(f"✅ В {table_name.upper()} добавлен:\n{data.get('Модель', '')} / {art_mc}")
+        logger.success(f"✅ Добавлен товар в {table_name.upper()}: {data.get('Модель', '')} / {art_mc}, поставщик: {data.get('Поставщик', '')}")
+
 
     except Exception as e:
         logger.exception("❌ Ошибка при добавлении")
     finally:
         conn.close()
 
-    return redirect(url_for('show_table', table_name=table_name))
+    return redirect(url_for('show_table', table_name=table_name, added='1'))
+
 
 
 @app.route('/statistic')
@@ -546,28 +736,54 @@ def show_statistic():
 
     tables = ['yandex', 'ozon', 'wildberries']
     data = {}
+    supplier_stats = {}
 
     for table in tables:
         df = pd.read_sql_query(f"SELECT Арт_MC, Поставщик, Артикул, Модель, Статус FROM '{table}'", conn)
         for _, row in df.iterrows():
             key = row['Арт_MC']
+            supplier = row.get('Поставщик', 'Неизвестно')
+            status = (row.get('Статус') or '').strip().lower()
+
+            # Формируем общую таблицу размещений (для stats_data)
             if key not in data:
                 data[key] = {
                     'Арт_MC': key,
-                    'Поставщик': row.get('Поставщик', ''),
+                    'Поставщик': supplier,
                     'Артикул': row.get('Артикул', ''),
                     'Модель': row.get('Модель', '')
                 }
             mp = table.capitalize()
             data[key][mp] = True
-            status = row.get('Статус', '').strip().lower()
             if status == 'выкл.':
                 data[key][f'Статус_{mp}'] = 'выкл.'
 
-    conn.close()
-    return render_template("statistic.html", stats_data=list(data.values()))
+            # Инициализация поставщика
+            if supplier not in supplier_stats:
+                supplier_stats[supplier] = {
+                    'Yandex': 0,
+                    'Ozon': 0,
+                    'Wildberries': 0,
+                    'Всего': 0,
+                    'Активно': 0,
+                    'Неактивно': 0
+                }
 
-    return render_template("statistic.html", stats_data=stats_data)
+            supplier_stats[supplier][mp] += 1
+            supplier_stats[supplier]['Всего'] += 1
+            if status == 'выкл.':
+                supplier_stats[supplier]['Неактивно'] += 1
+            else:
+                supplier_stats[supplier]['Активно'] += 1
+
+    conn.close()
+    return render_template(
+        "statistic.html",
+        stats_data=list(data.values()),
+        supplier_stats=supplier_stats
+    )
+
+
 
 
 @app.errorhandler(Exception)
@@ -609,6 +825,5 @@ if __name__ == '__main__':
         scheduler.start()
         logger.info("📅 Планировщик запущен (обновление склада каждые 5 минут)")
     logger.info("🚀 Приложение запущено")
-    # app.run(debug=True, use_reloader=False)   # Для работы на ПК
     app.run(host="127.0.0.1", port=5050, debug=False, use_reloader=False)
 

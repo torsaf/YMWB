@@ -35,7 +35,7 @@ import gspread
 
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
-from loguru import logger
+from logger_config import logger
 from notifiers import get_notifier
 
 # Загрузка переменных окружения из .env
@@ -176,7 +176,7 @@ def get_orders_yandex_market():
     url_ym = f'https://api.partner.market.yandex.ru/campaigns/{campaign_id}/orders'
     headers = {"Authorization": f"Bearer {ym_token}"}
     params = {
-        "fake": "true",
+        "fake": "false",
         "status": "PROCESSING",
         "substatus": "STARTED"
     }

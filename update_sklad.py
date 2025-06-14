@@ -25,7 +25,8 @@
 """
 
 
-from loguru import logger
+from logger_config import logger
+from datetime import datetime
 import pandas as pd
 import gspread
 import sqlite3
@@ -69,7 +70,6 @@ def gen_sklad():
 
 def update_sklad_db(sklad_df):
     logger.info("🚀 Начато обновление остатков из склада в базу данных")
-    # Загрузим актуальные флаги
     try:
         with open("System/stock_flags.json", "r", encoding="utf-8") as f:
             flags = json.load(f)
@@ -80,7 +80,6 @@ def update_sklad_db(sklad_df):
     conn = sqlite3.connect("System/marketplace_base.db", timeout=10)
     cursor = conn.cursor()
 
-    # Словарь: Арт мой → (Наличие, ОПТ)
     sklad_dict = {
         str(row["Арт мой"]): (int(row["Наличие"]), int(row["ОПТ"]))
         for _, row in sklad_df.iterrows()
@@ -96,67 +95,88 @@ def update_sklad_db(sklad_df):
 
         logger.info(f"🔄 Обновление таблицы {table}")
         cursor.execute(f"""
-            SELECT rowid, "Поставщик", "Арт_MC", "Статус" FROM "{table}"
+            SELECT rowid, "Поставщик", "Арт_MC", "Статус", "Модель" FROM "{table}"
         """)
         rows = cursor.fetchall()
 
-        for rowid, supplier, art_mc, status in rows:
+        for rowid, supplier, art_mc, status, model in rows:
             supplier = supplier.strip()
             art_mc_str = str(art_mc).strip()
             status = (status or "").strip().lower()
+            model = model.strip() if model else "—"
 
-            if supplier == "Sklad":
-                logger.debug(f"🔕 {table} | {art_mc_str} отключён — stock = 0")
-                if status == "выкл.":
+            if supplier != "Sklad":
+                continue
+
+            price_column = {
+                "yandex": "Цена YM",
+                "ozon": "Цена OZ",
+                "wildberries": "Цена WB"
+            }.get(table, "Цена YM")
+
+            if art_mc_str in sklad_dict:
+                nal, opt = sklad_dict[art_mc_str]
+
+                cursor.execute(f"""
+                    SELECT "Нал", "Опт", "{price_column}", "Наценка" FROM "{table}" WHERE rowid = ?
+                """, (rowid,))
+                row_data = cursor.fetchone()
+                if not row_data:
+                    continue
+
+                current_nal = int(row_data[0]) if row_data[0] is not None else 0
+                current_opt = int(row_data[1]) if row_data[1] is not None else 0
+                current_price = int(row_data[2]) if row_data[2] is not None else 0
+                markup_raw = str(row_data[3]).replace('%', '').replace(' ', '') if row_data[3] else '0'
+
+                try:
+                    markup = float(markup_raw)
+                except:
+                    markup = 0.0
+
+                try:
+                    new_price = round((opt + opt * markup / 100) / 100.0) * 100
+                except:
+                    new_price = opt
+
+                # Если выключен, текущий Нал = 0, и больше ничего не изменилось — не трогаем
+                if status == "выкл." and current_nal == 0 and nal >= 0:
+                    if (current_opt == opt) and (current_price == new_price):
+                        logger.debug(
+                            f"⏩ {table} | {art_mc_str} ({model}) — выключен, Нал=0, данные не изменились → пропуск")
+                        continue
+
+                if (current_nal != nal) or (current_opt != opt) or (current_price != new_price):
+                    logger.debug(
+                        f"✅ {table} | {art_mc_str} ({model}) → "
+                        f"stock: {current_nal} → {nal}, "
+                        f"opt: {current_opt} → {opt}, "
+                        f"price: {current_price} → {new_price}"
+                    )
                     cursor.execute(f"""
                         UPDATE "{table}"
-                        SET "Нал" = ?
+                        SET "Нал" = ?, "Опт" = ?, "{price_column}" = ?, "Дата изменения" = ?
                         WHERE rowid = ?
-                    """, (0, rowid))
-                elif art_mc_str in sklad_dict:
-                    nal, opt = sklad_dict[art_mc_str]
-                    logger.debug(f"✅ {table} | {art_mc_str} обновлён → stock = {nal}, opt = {opt}")
-                    cursor.execute(f"SELECT Наценка FROM '{table}' WHERE rowid = ?", (rowid,))
-                    markup_result = cursor.fetchone()
-                    try:
-                        markup = float(str(markup_result[0]).replace('%', '').replace(' ', '')) if markup_result and \
-                                                                                                   markup_result[
-                                                                                                       0] else 0.0
-                    except:
-                        markup = 0.0
+                    """, (nal, opt, new_price, datetime.now().strftime("%d.%m.%Y %H:%M"), rowid))
+            else:
+                # Товара нет на складе — обнуляем при необходимости
+                cursor.execute(f"""SELECT "Нал" FROM "{table}" WHERE rowid = ?""", (rowid,))
+                current = cursor.fetchone()
+                current_nal = int(current[0]) if current and current[0] is not None else 0
 
-                    # пересчитаем цену
-                    try:
-                        price = round((opt + opt * markup / 100) / 100.0) * 100
-                    except:
-                        price = opt
-
-                    # определим колонку для цены
-                    price_column = {
-                        "yandex": "Цена YM",
-                        "ozon": "Цена OZ",
-                        "wildberries": "Цена WB"
-                    }.get(table, "Цена YM")
-
-                    # обновим также цену
+                if current_nal != 0:
+                    if status == "выкл." and current_nal == 0:
+                        logger.debug(f"⏩ {table} | {art_mc_str} ({model}) — выключен и уже обнулён → пропуск")
+                        continue
+                    logger.debug(f"❌ {table} | {art_mc_str} ({model}) отсутствует на складе → stock: {current_nal} → 0")
                     cursor.execute(f"""
                         UPDATE "{table}"
-                        SET "Нал" = ?, "Опт" = ?, "{price_column}" = ?
+                        SET "Нал" = ?, "Дата изменения" = ?
                         WHERE rowid = ?
-                    """, (nal, opt, price, rowid))
-                else:
-                    logger.debug(f"❓ {table} | {art_mc_str} не найден в складе — stock = 0")
-                    cursor.execute(f"""
-                        UPDATE "{table}"
-                        SET "Нал" = ?
-                        WHERE rowid = ?
-                    """, (0, rowid))
-
+                    """, (0, datetime.now().strftime("%d.%m.%Y %H:%M"), rowid))
 
         conn.commit()
 
     conn.close()
     logger.success("✅ Обновление остатков со склада завершено")
 
-
-gen_sklad()

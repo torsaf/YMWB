@@ -60,54 +60,150 @@
         .text-left {
             text-align: left;
         }
+        .container {
+            display: flex;
+        }
+        .sidebar {
+            width: 160px;
+            min-width: 160px;
+            max-width: 160px;
+            border-right: 1px solid #ccc;
+            padding-right: 10px;
+            box-sizing: border-box;
+        }
+        .tab-button {
+            display: block;
+            padding: 10px;
+            margin-bottom: 5px;
+            background-color: #f2f2f2;
+            border: none;
+            width: 100%;
+            text-align: left;
+            cursor: pointer;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .tab-button.active {
+            background-color: #ddd;
+        }
+        .content {
+            flex: 1;
+            padding-left: 20px;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .highlight-total {
+            background-color: #e0e0e0;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
-<h2>Статистика размещения товаров по маркетплейсам</h2>
+<div class="container">
+    <div class="sidebar">
+        <button class="tab-button active" onclick="switchTab('products')">Товары</button>
+        <button class="tab-button" onclick="switchTab('suppliers')">Поставщики</button>
+    </div>
+    <div class="content">
+        <div id="products" class="tab-content active">
+            <h2>Статистика размещения товаров по маркетплейсам</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>№</th>
+                        <th>Арт_MC</th>
+                        <th>Поставщик</th>
+                        <th>Артикул</th>
+                        <th class="text-left">Модель</th>
+                        <th>Yandex</th>
+                        <th>Ozon</th>
+                        <th>Wildberries</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in stats_data %}
+                    <tr>
+                        <td>{{ loop.index }}</td>
+                        <td>{{ row['Арт_MC'] }}</td>
+                        <td>{{ row['Поставщик'] or '' }}</td>
+                        <td>{{ row['Артикул'] or '' }}</td>
+                        <td class="text-left">{{ row['Модель'] or '' }}</td>
+                        <td>
+                            {% if row['Yandex'] %}
+                                <span class="check">✔️</span>
+                                {% if row.get('Статус_Yandex') == 'выкл.' %}
+                                    <span class="disabled-marker">-</span>
+                                {% endif %}
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if row['Ozon'] %}
+                                <span class="check">✔️</span>
+                                {% if row.get('Статус_Ozon') == 'выкл.' %}
+                                    <span class="disabled-marker">-</span>
+                                {% endif %}
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if row['Wildberries'] %}
+                                <span class="check">✔️</span>
+                                {% if row.get('Статус_Wildberries') == 'выкл.' %}
+                                    <span class="disabled-marker">-</span>
+                                {% endif %}
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
 
-<table>
-    <thead>
-        <tr>
-            <th>№</th>
-            <th>Арт_MC</th>
-            <th>Поставщик</th>
-            <th>Артикул</th>
-            <th class="text-left">Модель</th>
-            <th>Yandex</th>
-            <th>Ozon</th>
-            <th>Wildberries</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for row in stats_data %}
-        <tr>
-            <td>{{ loop.index }}</td>
-            <td>{{ row['Арт_MC'] }}</td>
-            <td>{{ row['Поставщик'] or '' }}</td>
-            <td>{{ row['Артикул'] or '' }}</td>
-            <td class="text-left">{{ row['Модель'] or '' }}</td>
-            <td>
-                {% if row['Yandex'] %}
-                    <span class="check">✔️</span>
-                    {% if row.get('Статус_Yandex') == 'выкл.' %}<span class="disabled-marker">-</span>{% endif %}
-                {% endif %}
-            </td>
-            <td>
-                {% if row['Ozon'] %}
-                    <span class="check">✔️</span>
-                    {% if row.get('Статус_Ozon') == 'выкл.' %}<span class="disabled-marker">-</span>{% endif %}
-                {% endif %}
-            </td>
-            <td>
-                {% if row['Wildberries'] %}
-                    <span class="check">✔️</span>
-                    {% if row.get('Статус_Wildberries') == 'выкл.' %}<span class="disabled-marker">-</span>{% endif %}
-                {% endif %}
-            </td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
+        <div id="suppliers" class="tab-content">
+            <h2>Статистика по поставщикам</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Поставщик</th>
+                        <th>Yandex</th>
+                        <th>Ozon</th>
+                        <th>Wildberries</th>
+                        <th class="highlight-total">Всего</th>
+                        <th>Активно</th>
+                        <th>Неактивно</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for supplier, data in supplier_stats.items() %}
+                    <tr>
+                        <td>{{ supplier }}</td>
+                        <td>{{ data['Yandex'] }}</td>
+                        <td>{{ data['Ozon'] }}</td>
+                        <td>{{ data['Wildberries'] }}</td>
+                        <td class="highlight-total">{{ data['Всего'] }}</td>
+                        <td>{{ data['Активно'] }}</td>
+                        <td>{{ data['Неактивно'] }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
 
+<script>
+function switchTab(tabId) {
+    document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+
+    document.getElementById(tabId).classList.add('active');
+    event.currentTarget.classList.add('active');
+}
+</script>
 </body>
 </html>

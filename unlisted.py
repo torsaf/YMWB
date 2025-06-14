@@ -1,7 +1,6 @@
 import sqlite3
 import pandas as pd
-import logging
-logger = logging.getLogger(__name__)
+from logger_config import logger
 
 
 def generate_unlisted():

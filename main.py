@@ -1,5 +1,4 @@
 import os
-
 import sys
 import signal
 from pathlib import Path
@@ -10,28 +9,11 @@ import stock
 from dotenv import load_dotenv
 from pathlib import Path
 load_dotenv(dotenv_path=Path(__file__).parent / "System" / ".env")
-from loguru import logger
+from logger_config import logger
 
 
 # 📦 Переход в директорию проекта
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
-
-# 📝 ЛОГИРОВАНИЕ
-LOG_DIR = Path("System/logs")
-LOG_DIR.mkdir(parents=True, exist_ok=True)
-
-logger.remove()
-logger.add(
-    LOG_DIR / "app_{time:YYYY-MM-DD}.log",
-    rotation="5 MB",
-    retention="7 days",
-    compression="zip",
-    encoding="utf-8",
-    enqueue=True,
-    backtrace=True,
-    diagnose=True,
-    level="DEBUG"
-)
 
 
 # 📬 Телеграм-уведомление

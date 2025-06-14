@@ -34,7 +34,8 @@ import json
 from datetime import datetime, timezone
 from dotenv import load_dotenv
 from notifiers import get_notifier
-from loguru import logger
+from logger_config import logger
+
 
 # Загрузка токенов и переменных окружения
 load_dotenv(dotenv_path=os.path.join("System", ".env"))

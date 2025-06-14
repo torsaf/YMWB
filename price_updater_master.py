@@ -28,7 +28,7 @@ import sqlite3
 import math
 import json
 import requests
-from loguru import logger
+from logger_config import logger
 from dotenv import load_dotenv
 from notifiers import get_notifier
 

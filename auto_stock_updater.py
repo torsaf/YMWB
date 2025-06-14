@@ -10,7 +10,8 @@
 """
 
 import sqlite3
-from loguru import logger
+from logger_config import logger
+from datetime import datetime
 import json
 import os
 
@@ -39,61 +40,75 @@ def update(flags):
             logger.info(f"⏭ Пропускаем таблицу {table} — отключена в флагах")
             continue
 
+        logger.info(f"🔄 Обновление таблицы {table}")
         target_cursor = target_conn.cursor()
         target_cursor.execute(f"""
-            SELECT rowid, "Поставщик", "Артикул", "Статус" FROM "{table}"
+            SELECT rowid, "Поставщик", "Артикул", "Статус", "Модель" FROM "{table}"
         """)
         rows = target_cursor.fetchall()
-        logger.debug(f"📄 Обрабатывается таблица {table}: {len(rows)} строк")
 
-        for rowid, supplier, article, status in rows:
+        for rowid, supplier, article, status, model in rows:
             supplier = supplier.strip()
             article = article.strip()
             status = status.strip().lower()
+            model = model.strip() if model else "—"
             key = (supplier, article)
 
             if status == "выкл.":
-                logger.debug(f"🔕 {table} | {supplier} | {article} отключён — stock = 0")
-                logger.debug(f"🔕 Отключен товар {supplier} | {article} → stock=0")
-                target_cursor.execute(f"""
-                    UPDATE "{table}" SET "Нал" = ? WHERE rowid = ?
-                """, (0, rowid))
-            elif key in source_dict:
-                stock, opt = source_dict[key]
-                logger.debug(f"✅ Обновление {table} | {supplier} | {article} → stock={stock}, opt={opt}")
-                # Получим наценку
-                target_cursor.execute(f"SELECT Наценка FROM '{table}' WHERE rowid = ?", (rowid,))
-                markup_result = target_cursor.fetchone()
-                try:
-                    markup = float(str(markup_result[0]).replace('%', '').replace(' ', '')) if markup_result and \
-                                                                                               markup_result[0] else 0.0
-                except:
-                    markup = 0.0
-
-                # Пересчитаем цену
-                try:
-                    price = round((float(opt) + float(opt) * markup / 100) / 100.0) * 100
-                except:
-                    price = opt
-
-                # Подготовим словарь: в какую колонку писать цену
-                price_column = {
-                    'yandex': 'Цена YM',
-                    'ozon': 'Цена OZ',
-                    'wildberries': 'Цена WB'
-                }.get(table, 'Цена YM')
-
-                # Обновляем всё: Нал, Опт, Цена
-                target_cursor.execute(f"""
-                    UPDATE "{table}" SET "Нал" = ?, "Опт" = ?, "{price_column}" = ? WHERE rowid = ?
-                """, (stock, opt, price, rowid))
-
-            else:
-                if supplier != "Sklad":
-                    logger.debug(f"❓ {table} | {supplier} | {article} не найден в источнике — stock = 0")
+                target_cursor.execute(f"""SELECT "Нал" FROM "{table}" WHERE rowid = ?""", (rowid,))
+                current_stock = target_cursor.fetchone()
+                if current_stock and int(current_stock[0]) != 0:
+                    logger.debug(f"⛔ {table} | {article} ({model}) — статус 'выкл.' → обнуляем stock")
                     target_cursor.execute(f"""
-                        UPDATE "{table}" SET "Нал" = 0 WHERE rowid = ?
-                    """, (rowid,))
+                        UPDATE "{table}" SET "Нал" = ?, "Дата изменения" = ? WHERE rowid = ?
+                    """, (0, datetime.now().strftime("%d.%m.%Y %H:%M"), rowid))
+                continue
+
+            if key not in source_dict:
+                continue
+
+            stock, opt = source_dict[key]
+
+            price_column = {
+                'yandex': 'Цена YM',
+                'ozon': 'Цена OZ',
+                'wildberries': 'Цена WB'
+            }.get(table, 'Цена YM')
+
+            target_cursor.execute(f"""
+                SELECT "Нал", "Опт", "{price_column}", "Наценка" FROM "{table}" WHERE rowid = ?
+            """, (rowid,))
+            current = target_cursor.fetchone()
+            if not current:
+                continue
+
+            current_stock = int(current[0]) if current[0] is not None else 0
+            current_opt = int(current[1]) if current[1] is not None else 0
+            current_price = int(current[2]) if current[2] is not None else 0
+            markup_raw = str(current[3]).replace('%', '').replace(' ', '') if current[3] else '0'
+
+            try:
+                markup = float(markup_raw)
+            except:
+                markup = 0.0
+
+            try:
+                price = round((float(opt) + float(opt) * markup / 100) / 100.0) * 100
+            except:
+                price = opt
+
+            if (current_stock != stock) or (current_opt != opt) or (current_price != price):
+                logger.debug(
+                    f"✅ {table} | {article} ({model}) → "
+                    f"stock: {current_stock} → {stock}, "
+                    f"opt: {current_opt} → {opt}, "
+                    f"price: {current_price} → {price}"
+                )
+                target_cursor.execute(f"""
+                    UPDATE "{table}"
+                    SET "Нал" = ?, "Опт" = ?, "{price_column}" = ?, "Дата изменения" = ?
+                    WHERE rowid = ?
+                """, (stock, opt, price, datetime.now().strftime("%d.%m.%Y %H:%M"), rowid))
 
         target_conn.commit()
         logger.info(f"💾 Обновление таблицы {table} сохранено")
@@ -101,3 +116,4 @@ def update(flags):
     source_conn.close()
     target_conn.close()
     logger.success("✅ Обновление остатков завершено")
+
