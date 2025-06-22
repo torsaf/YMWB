@@ -102,16 +102,22 @@
             background-color: #e0e0e0;
             font-weight: bold;
         }
+        .diff-cell {
+            background-color: #fff3cd;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
 <div class="container">
     <div class="sidebar">
-        <button class="tab-button active" onclick="switchTab('products')">Товары</button>
+        <button class="tab-button active" onclick="switchTab('errors')">Ошибки</button>
+        <button class="tab-button" onclick="switchTab('products')">Товары</button>
         <button class="tab-button" onclick="switchTab('suppliers')">Поставщики</button>
+
     </div>
     <div class="content">
-        <div id="products" class="tab-content active">
+        <div id="products" class="tab-content">
             <h2>Статистика размещения товаров по маркетплейсам</h2>
             <table>
                 <thead>
@@ -188,6 +194,35 @@
                         <td class="highlight-total">{{ data['Всего'] }}</td>
                         <td>{{ data['Активно'] }}</td>
                         <td>{{ data['Неактивно'] }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div id="errors" class="tab-content active">
+            <h2>Ошибки соответствия между маркетплейсами</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Маркетплейс</th>
+                        <th>Арт_MC</th>
+                        <th>Поставщик</th>
+                        <th>Артикул</th>
+                        <th>Модель</th>
+                        <th>Нал</th>
+                        <th>Опт</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for error in errors %}
+                    <tr>
+                        <td>{{ error['Маркетплейс'] }}</td>
+                        <td>{{ error['Арт_MC'] }}</td>
+                        <td class="{% if error.diff['Поставщик'] %}diff-cell{% endif %}">{{ error['Поставщик'] }}</td>
+                        <td class="{% if error.diff['Артикул'] %}diff-cell{% endif %}">{{ error['Артикул'] }}</td>
+                        <td class="{% if error.diff['Модель'] %}diff-cell{% endif %}">{{ error['Модель'] }}</td>
+                        <td class="{% if error.diff['Нал'] %}diff-cell{% endif %}">{{ error['Нал'] }}</td>
+                        <td class="{% if error.diff['Опт'] %}diff-cell{% endif %}">{{ error['Опт'] }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>

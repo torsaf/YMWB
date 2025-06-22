@@ -6,7 +6,7 @@
     <title>Просмотр таблиц</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='icons.png') }}">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=1600">
     <style>
         body {
             font-family: 'Inter', sans-serif;
@@ -337,7 +337,7 @@
             gap: 10px;
         }
         .table-container {
-            overflow-x: hidden;
+            overflow-x: auto !important;
             width: 100%;
         }
         table {
@@ -483,29 +483,29 @@
         }
         /* ДОБАВЬ в конец того же <style>, где уже лежит мобильный медиазапрос */
         /* --- Мобильный фикс (≤ 767 px) ----------------------------------- */
-        @media (max-width: 767px){
-            html, body{
-                 height: auto;     /* страница может расти вниз */
-                 min-height: 100vh;/* но не меньше высоты видимого экрана */
-             }
+<!--        @media (max-width: 767px){-->
+<!--            html, body{-->
+<!--                 height: auto;     /* страница может расти вниз */-->
+<!--                 min-height: 100vh;/* но не меньше высоты видимого экрана */-->
+<!--             }-->
 
-          /* 1. Обнуляем центрирование только для таблицы  */
-          .table-container{
-              justify-content: flex-start;   /* вместо center */
-              overflow-x: auto;              /* собственная полоса прокрутки */
-              /* 2. «Вытягиваем» контейнер на всю ширину,
-                    не трогая padding у .wrapper */
-              margin-left: -20px;            /* съедаем левый внутренний отступ wrapper */
-              margin-right: -20px;           /* …и правый */
-              padding-left: 20px;            /* возвращаем «буфер», чтобы текст не лип к краю */
-              padding-right: 20px;
-          }
+<!--          /* 1. Обнуляем центрирование только для таблицы  */-->
+<!--          .table-container{-->
+<!--              justify-content: flex-start;   /* вместо center */-->
+<!--              overflow-x: auto;              /* собственная полоса прокрутки */-->
+<!--              /* 2. «Вытягиваем» контейнер на всю ширину,-->
+<!--                    не трогая padding у .wrapper */-->
+<!--              margin-left: -20px;            /* съедаем левый внутренний отступ wrapper */-->
+<!--              margin-right: -20px;           /* …и правый */-->
+<!--              padding-left: 20px;            /* возвращаем «буфер», чтобы текст не лип к краю */-->
+<!--              padding-right: 20px;-->
+<!--          }-->
 
-          /* 3. Таблица без margin:auto, чтобы не убегала вправо */
-          .table-container > table{
-              margin: 0;
-          }
-        }
+<!--          /* 3. Таблица без margin:auto, чтобы не убегала вправо */-->
+<!--          .table-container > table{-->
+<!--              margin: 0;-->
+<!--          }-->
+<!--        }-->
         thead {
             position: relative;
         }
@@ -562,6 +562,13 @@
         .main-table select {
             font-size: 90% !important;
         }
+        .error-indicator {
+            color: red;
+            font-size: 18px;
+            font-weight: bold;
+            margin-left: 2px;
+            line-height: 1;
+          }
     </style>
 </head>
 <body>
@@ -643,15 +650,18 @@
           <!-- Кнопки "Статистика" и "Новые товары" друг над другом -->
             <div style="display: flex; flex-direction: column; gap: 10px; margin-right: 15px;">
               <a href="/statistic"
-                 style="display: flex; align-items: center; gap: 6px;
-                        padding: 6px 12px; font-size: 15px;
-                        border-radius: 6px; border: 1px solid #ccc;
-                        background-color: #f0f0f0;
-                        color: #333; text-decoration: none;
-                        transition: all 0.2s;">
-                <img src="{{ url_for('static', filename='icons/stats.svg') }}" alt="Статистика" width="16" height="16">
-                Статистика
-              </a>
+                   style="display: flex; align-items: center; gap: 6px;
+                          padding: 6px 12px; font-size: 15px;
+                          border-radius: 6px; border: 1px solid #ccc;
+                          background-color: #f0f0f0;
+                          color: #333; text-decoration: none;
+                          transition: all 0.2s;">
+                  <img src="{{ url_for('static', filename='icons/stats.svg') }}" alt="Статистика" width="16" height="16">
+                  Статистика
+                  {% if has_errors %}
+                    <span class="error-indicator">❗</span>
+                  {% endif %}
+                </a>
 
               <a href="/download_unlisted"
                  style="display: flex; align-items: center; gap: 6px;
@@ -1011,10 +1021,13 @@
         });
     });
     </script>
+
     <script>
     document.querySelectorAll('.edit-btn').forEach(function(button) {
         button.addEventListener('click', function () {
             const row = this.closest('tr');
+            isEditingRow = true;
+            row.classList.add('highlighted');
 
             const table = "{{ selected_table }}";
             const headers = {{ table_data.columns.tolist() | tojson }};
@@ -1227,6 +1240,7 @@
                             showConfirmButton: false,
                             timer: 1500
                         });
+                        isEditingRow = false;
                         setTimeout(() => location.reload(), 500);
                     } else {
                         Swal.fire('Ошибка', 'Не удалось сохранить товар', 'error');
@@ -1436,6 +1450,8 @@
 
         clickRows.forEach(row => {
             row.addEventListener("click", function () {
+                if (isEditingRow) return; // 🚫 Запрещаем переключение выделения при редактировании
+
                 const cells = this.querySelectorAll("td");
                 const artValue = cells[clickArtIndex]?.innerText.trim();
                 const isHighlighted = this.classList.contains("highlighted");
@@ -1444,15 +1460,12 @@
                 clickRows.forEach(r => r.classList.remove("highlighted"));
 
                 if (!isHighlighted) {
-                    // Выделяем текущую
                     this.classList.add("highlighted");
                     this.style.setProperty('--highlight-color', color);
-
                     if (artValue) {
                         localStorage.setItem("highlight_art", artValue);
                     }
                 } else {
-                    // Повторный клик — снимаем выделение
                     localStorage.removeItem("highlight_art");
                 }
             });
@@ -1486,6 +1499,9 @@
     </script>
     {% endif %}
 
+<script>
+let isEditingRow = false;
+</script>
 <script>
 document.addEventListener("DOMContentLoaded", function () {
   const input = document.getElementById("custom-search");

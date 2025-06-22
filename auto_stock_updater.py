@@ -113,6 +113,30 @@ def update(flags):
         target_conn.commit()
         logger.info(f"💾 Обновление таблицы {table} сохранено")
 
+    # 🔍 Обнуляем "Нал" у товаров, которых нет в новой базе, кроме Sklad
+    for table in target_tables:
+        if not flags.get(table, True):
+            continue
+
+        logger.info(f"🧹 Проверка отсутствующих товаров для {table}")
+        cursor = target_conn.cursor()
+
+        # Все текущие строки в таблице
+        cursor.execute(f"""SELECT rowid, "Поставщик", "Артикул", "Нал", "Статус", "Модель" FROM "{table}" """)
+        all_rows = cursor.fetchall()
+
+        for rowid, supplier, article, nal, status, model in all_rows:
+            key = (supplier.strip(), article.strip())
+            if key not in source_dict and supplier.strip() != "Sklad":
+                if str(nal).strip() != "0":
+                    logger.debug(f"❌ {table} | {article} ({model}) отсутствует в источнике → Нал = 0")
+                    cursor.execute(f"""
+                        UPDATE "{table}" SET "Нал" = 0, "Дата изменения" = ? WHERE rowid = ?
+                    """, (datetime.now().strftime("%d.%m.%Y %H:%M"), rowid))
+
+        target_conn.commit()
+
+
     source_conn.close()
     target_conn.close()
     logger.success("✅ Обновление остатков завершено")

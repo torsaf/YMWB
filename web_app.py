@@ -444,7 +444,10 @@ def show_table(table_name):
     conn_sup.close()
 
     saved_form_data = session.pop('saved_form', {})
+    has_errors = has_error_products()
 
+    print("🔥 has_errors =", has_errors)
+    logger.debug(f"🔥 has_errors = {has_errors}")
     return render_template(
         "index.html",
         tables=tables,
@@ -457,7 +460,8 @@ def show_table(table_name):
         last_download_time=last_download_time,
         global_stock_flags=global_stock_flags,
         saved_form_data=saved_form_data,
-        suppliers_list=suppliers_list
+        suppliers_list=suppliers_list,
+        has_errors = has_errors
     )
 
 
@@ -729,6 +733,7 @@ def add_item(table_name):
 
 
 @app.route('/statistic')
+@requires_auth
 def show_statistic():
     logger.info("📈 Открыта страница статистики")
     conn = sqlite3.connect(DB_PATH)
@@ -738,6 +743,7 @@ def show_statistic():
     data = {}
     supplier_stats = {}
 
+    # === Формирование общей таблицы размещений и статистики по поставщикам ===
     for table in tables:
         df = pd.read_sql_query(f"SELECT Арт_MC, Поставщик, Артикул, Модель, Статус FROM '{table}'", conn)
         for _, row in df.iterrows():
@@ -745,7 +751,6 @@ def show_statistic():
             supplier = row.get('Поставщик', 'Неизвестно')
             status = (row.get('Статус') or '').strip().lower()
 
-            # Формируем общую таблицу размещений (для stats_data)
             if key not in data:
                 data[key] = {
                     'Арт_MC': key,
@@ -753,12 +758,12 @@ def show_statistic():
                     'Артикул': row.get('Артикул', ''),
                     'Модель': row.get('Модель', '')
                 }
+
             mp = table.capitalize()
             data[key][mp] = True
             if status == 'выкл.':
                 data[key][f'Статус_{mp}'] = 'выкл.'
 
-            # Инициализация поставщика
             if supplier not in supplier_stats:
                 supplier_stats[supplier] = {
                     'Yandex': 0,
@@ -777,11 +782,87 @@ def show_statistic():
                 supplier_stats[supplier]['Активно'] += 1
 
     conn.close()
+
+    # === Анализ ошибок между маркетплейсами ===
+    errors = detect_errors_across_marketplaces()
+
     return render_template(
         "statistic.html",
         stats_data=list(data.values()),
-        supplier_stats=supplier_stats
+        supplier_stats=supplier_stats,
+        errors=errors
     )
+
+
+
+def has_error_products():
+    errors = detect_errors_across_marketplaces()
+    return len(errors) > 0
+
+def detect_errors_across_marketplaces():
+    conn = sqlite3.connect(DB_PATH)
+    dfs = []
+    for table in ['yandex', 'ozon', 'wildberries']:
+        try:
+            df = pd.read_sql_query(f"SELECT * FROM '{table}'", conn)
+            df["Источник"] = table.capitalize()
+            dfs.append(df)
+        except Exception as e:
+            logger.warning(f"Ошибка при чтении таблицы {table}: {e}")
+    conn.close()
+
+    if not dfs:
+        return []
+
+    all_data = pd.concat(dfs, ignore_index=True)
+    all_data = all_data.dropna(subset=["Арт_MC"])
+    all_data["Арт_MC"] = all_data["Арт_MC"].astype(str).str.strip()
+
+    duplicates = all_data[all_data.duplicated(subset=["Арт_MC"], keep=False)]
+    grouped = duplicates.groupby("Арт_MC")
+    logger.debug(f"🔍 Найдено групп с повторяющимся Арт_MC: {len(grouped)}")
+
+    errors = []
+    for art_mc, group in grouped:
+        nal_values = group["Нал"].astype(str).str.lower().str.strip().tolist()
+        status_values = group["Статус"].astype(str).str.lower().str.strip().tolist()
+        article_values = group["Артикул"].astype(str).str.lower().str.strip().tolist()
+        model_values = group["Модель"].astype(str).str.lower().str.strip().tolist()
+        opt_values = group["Опт"].astype(str).str.strip().tolist()
+        supplier_values = group["Поставщик"].astype(str).str.lower().str.strip().tolist()
+
+        has_diff = (
+            len(set(nal_values)) > 1
+            or len(set(status_values)) > 1
+            or len(set(article_values)) > 1
+            or len(set(model_values)) > 1
+            or len(set(opt_values)) > 1
+            or len(set(supplier_values)) > 1
+        )
+
+        if has_diff:
+            diff_flags = {
+                "Нал": len(set(nal_values)) > 1,
+                "Статус": len(set(status_values)) > 1,
+                "Артикул": len(set(article_values)) > 1,
+                "Модель": len(set(model_values)) > 1,
+                "Опт": len(set(opt_values)) > 1,
+                "Поставщик": len(set(supplier_values)) > 1,
+            }
+
+            for _, row in group.iterrows():
+                errors.append({
+                    "Арт_MC": row["Арт_MC"],
+                    "Маркетплейс": row["Источник"],
+                    "Статус": row.get("Статус", ""),
+                    "Нал": row.get("Нал", ""),
+                    "Поставщик": row.get("Поставщик", ""),
+                    "Артикул": row.get("Артикул", ""),
+                    "Модель": row.get("Модель", ""),
+                    "Опт": row.get("Опт", ""),
+                    "diff": diff_flags
+                })
+    return errors
 
 
 
