@@ -132,14 +132,25 @@ def oz_update(oz_data):
             'Api-Key': api_key,
             'Content-Type': 'application/json'
         }
-        payload = {"stocks": oz_data}
-        response = requests.post(url, headers=headers, json=payload, timeout=10)
-        if response.status_code != 200:
-            raise Exception(f"Статус-код: {response.status_code}, ответ: {response.text}")
+
+        def chunk_list(data, size=100):
+            for i in range(0, len(data), size):
+                yield data[i:i + size]
+
+        for chunk in chunk_list(oz_data, 100):
+            payload = {"stocks": chunk}
+            response = requests.post(url, headers=headers, json=payload, timeout=10)
+            if response.status_code != 200:
+                raise Exception(f"Статус-код: {response.status_code}, ответ: {response.text}")
+            logger.success(f"✅ Отправлено {len(chunk)} товаров в OZON")
+
     except Exception as e:
         logger.error(f"❌ Ошибка при обновлении Ozon: {e}")
-        telegram.notify(token=telegram_got_token_error, chat_id=telegram_chat_id_error,
-                        message=f"😨 Ошибка при обновлении OZON: {e}")
+        telegram.notify(
+            token=telegram_got_token_error,
+            chat_id=telegram_chat_id_error,
+            message=f"😨 Ошибка при обновлении OZON: {e}"
+        )
 
 # # 🚀 Запуск
 # if __name__ == "__main__":
