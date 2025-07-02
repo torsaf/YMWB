@@ -61,6 +61,7 @@ def update_stock(articul, platform):
 
     table = platform_table_map.get(platform)
     if not table:
+        conn.close()
         return
 
     df = pd.read_sql_query(f"SELECT * FROM '{table}' WHERE Арт_MC = ?", conn, params=(articul,))
@@ -70,17 +71,16 @@ def update_stock(articul, platform):
 
     def format_price(value):
         try:
-            return f"{int(value):,}".replace(",", " ") + " р."
+            return f"{int(value)} р."
         except (ValueError, TypeError):
             return "—"
+
     row = df.iloc[0]
     model = row.get("Модель", "Неизвестно")
     stock = int(row.get("Нал", 0))
     supplier = row.get("Поставщик", "N/A")
     opt_price = format_price(row.get("Опт"))
     artikul_alt = row.get("Артикул", "")
-
-    # Получаем нужную цену в зависимости от платформы
     price_field_map = {
         'yandex': 'Цена YM',
         'ozon': 'Цена OZ',
@@ -89,70 +89,77 @@ def update_stock(articul, platform):
     rrc_field = price_field_map.get(table)
     rrc_price = format_price(row.get(rrc_field))
 
-
     if supplier.lower() == 'sklad':
-        gc = gspread.service_account(filename='System/my-python-397519-3688db4697d6.json')
-        sh = gc.open("КАЗНА")
-        worksheet = sh.worksheet("СКЛАД")
-        data = worksheet.get_all_values()
-        sklad = pd.DataFrame(data[1:], columns=data[0])
+        try:
+            gc = gspread.service_account(filename='System/my-python-397519-3688db4697d6.json')
+            sh = gc.open("КАЗНА")
+            worksheet = sh.worksheet("СКЛАД")
+            data = worksheet.get_all_values()
+            sklad = pd.DataFrame(data[1:], columns=data[0])
 
-        sklad['Наличие'] = pd.to_numeric(sklad['Наличие'], errors='coerce').fillna(0).astype(int)
-        sklad['Арт мой'] = sklad['Арт мой'].apply(lambda x: str(int(x)) if str(x).isdigit() else '')
+            sklad['Наличие'] = pd.to_numeric(sklad['Наличие'], errors='coerce').fillna(0).astype(int)
+            sklad['Арт мой'] = sklad['Арт мой'].apply(lambda x: str(int(x)) if str(x).isdigit() else '')
 
-        matched_rows = sklad[sklad['Арт мой'] == articul]
-        if matched_rows.empty:
-            return
+            matched_rows = sklad[sklad['Арт мой'] == articul]
+            if matched_rows.empty:
+                conn.close()
+                return
 
-        row_index = matched_rows.index[0]
-        prev_q = sklad.at[row_index, 'Наличие']
-        sklad.at[row_index, 'Наличие'] = max(0, prev_q - 1)
-        new_q = sklad.at[row_index, 'Наличие']
+            row_index = matched_rows.index[0]
+            prev_q = sklad.at[row_index, 'Наличие']
+            sklad.at[row_index, 'Наличие'] = max(0, prev_q - 1)
+            new_q = sklad.at[row_index, 'Наличие']
 
-        updated_data = sklad.iloc[:, :8].replace([float('inf'), float('-inf')], 0).fillna(0).values.tolist()
-        worksheet.update(values=updated_data, range_name='A2:H')
+            updated_data = sklad.iloc[:, :8].replace([float('inf'), float('-inf')], 0).fillna(0).values.tolist()
+            worksheet.update(values=updated_data, range_name='A2:H')
 
-        message = (
-            f"✅ Бот вычел со склада\n\n"
-            f"Товар: \"{model}\"\n"
-            f"Артикул: *{articul}*\n"
-            f"Опт: {opt_price}, РРЦ: {rrc_price}\n"
-            f"Было: {prev_q}, стало: {new_q}.\n"
-            f"Склад: {supplier}"
-        )
+            message = (
+                f"✅ Бот вычел со склада\n\n"
+                f"Товар: \"{model}\"\n"
+                f"Артикул: *{articul}*\n"
+                f"Опт: {opt_price}, РРЦ: {rrc_price}\n"
+                f"Было: {prev_q}, стало: {new_q}.\n"
+                f"Склад: {supplier}"
+            )
+            telegram.notify(token=telegram_got_token, chat_id=telegram_chat_id, message=message, parse_mode='markdown')
+
+        except Exception as e:
+            logger.error(f"❌ Ошибка при работе с Google Sheets: {e}")
+            error_message = (
+                f"⚠️ *Ошибка при доступе к Google Sheets!*\n\n"
+                f"Товар: \"{model}\"\n"
+                f"Артикул: *{articul}*\n"
+                f"Платформа: {platform}\n"
+                f"Не удалось вычесть остаток на складе (Sklad).\n"
+                f"Пожалуйста, вычтите вручную."
+            )
+            telegram.notify(token=telegram_got_token, chat_id=telegram_chat_id, message=error_message, parse_mode='markdown')
+
     else:
         new_stock = max(0, stock - 1)
         cur = conn.cursor()
         cur.execute(f"UPDATE '{table}' SET Нал = ? WHERE Арт_MC = ?", (new_stock, articul))
         conn.commit()
         logger.success(f"✅ Остаток обновлён: {articul} | {stock} → {new_stock}")
-        # 🔄 Дополнительное вычитание из базы !YMWB.db
+
         try:
             alt_db_path = "System/!YMWB.db"
             alt_conn = sqlite3.connect(alt_db_path, timeout=10)
             alt_cur = alt_conn.cursor()
 
-            # Поиск всех строк с этим артикулом
             alt_df = pd.read_sql_query("SELECT rowid, * FROM prices WHERE Артикул = ?", alt_conn, params=(artikul_alt,))
             if not alt_df.empty:
                 for _, alt_row in alt_df.iterrows():
                     rowid = alt_row["rowid"]
                     current_qty = int(alt_row.get("Наличие", 0))
                     updated_qty = max(0, current_qty - 1)
-
-                    alt_cur.execute(
-                        "UPDATE prices SET Наличие = ? WHERE rowid = ?",
-                        (updated_qty, rowid)
-                    )
+                    alt_cur.execute("UPDATE prices SET Наличие = ? WHERE rowid = ?", (updated_qty, rowid))
                     logger.debug(f"🔧 YMWB: {artikul_alt} | {current_qty} → {updated_qty}")
-
                 alt_conn.commit()
             else:
                 logger.warning(f"❗ Артикул {artikul_alt} не найден в !YMWB.db")
-
         except Exception as e:
             logger.error(f"❌ Ошибка при обновлении !YMWB.db: {e}")
-
         finally:
             alt_conn.close()
 
@@ -164,9 +171,10 @@ def update_stock(articul, platform):
             f"Было: {stock}, стало: {new_stock}.\n"
             f"Склад: {supplier}"
         )
+        telegram.notify(token=telegram_got_token, chat_id=telegram_chat_id, message=message, parse_mode='markdown')
 
     conn.close()
-    telegram.notify(token=telegram_got_token, chat_id=telegram_chat_id, message=message, parse_mode='markdown')
+
 
 
 def get_orders_yandex_market():

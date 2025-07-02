@@ -1656,15 +1656,7 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     });
 
-    // При загрузке страницы — если есть сохранённые фильтры, вставляем их в URL
-    const url = new URL(window.location.href);
-    if (!url.searchParams.has("search") && !url.searchParams.has("sort") && localStorage.getItem("savedSearch")) {
-        url.searchParams.set("search", localStorage.getItem("savedSearch"));
-        window.location.href = url.toString();
-    } else if (!url.searchParams.has("letter") && localStorage.getItem("savedLetter")) {
-        url.searchParams.set("letter", localStorage.getItem("savedLetter"));
-        window.location.href = url.toString();
-    }
+
 });
 </script>
 
@@ -1693,6 +1685,23 @@ document.addEventListener("DOMContentLoaded", function () {
     sessionStorage.removeItem('add_form_data');
 </script>
 {% endif %}
+
+<script>
+// Если это первый заход на сайт (новая сессия) — сбрасываем выделенную строку
+(function () {
+    const sessionKey = 'session_start';
+    const highlightKey = 'highlight_art';
+
+    // Проверим: если sessionStorage ещё не содержит ключа, значит это первый заход
+    if (!sessionStorage.getItem(sessionKey)) {
+        sessionStorage.setItem(sessionKey, '1');
+        localStorage.removeItem(highlightKey);  // сбрасываем выделение
+        console.log('[highlight] Новая сессия — выделение сброшено');
+    } else {
+        console.log('[highlight] Сессия продолжается — выделение сохраняем');
+    }
+})();
+</script>
 
 </body>
 </html>
