@@ -50,7 +50,10 @@ def update_yandex():
     try:
         conn = sqlite3.connect('System/marketplace_base.db', timeout=10)
         cursor = conn.cursor()
-        cursor.execute("SELECT `Арт_MC`, `Цена YM` FROM yandex WHERE `Арт_MC` IS NOT NULL AND `Цена YM` IS NOT NULL")
+        cursor.execute("""
+            SELECT `Арт_MC`, `Цена` FROM marketplace
+            WHERE `Маркетплейс` = 'yandex' AND `Арт_MC` IS NOT NULL AND `Цена` IS NOT NULL
+        """)
         rows = cursor.fetchall()
         logger.debug(f"📥 Загружено {len(rows)} строк из базы для Yandex")
         conn.close()
@@ -91,7 +94,10 @@ def update_ozon():
     try:
         conn = sqlite3.connect('System/marketplace_base.db')
         cursor = conn.cursor()
-        cursor.execute("SELECT `Арт_MC`, `Цена OZ` FROM ozon WHERE `Арт_MC` IS NOT NULL AND `Цена OZ` IS NOT NULL")
+        cursor.execute("""
+            SELECT `Арт_MC`, `Цена` FROM marketplace
+            WHERE `Маркетплейс` = 'ozon' AND `Арт_MC` IS NOT NULL AND `Цена` IS NOT NULL
+        """)
         rows = cursor.fetchall()
         logger.debug(f"📥 Загружено {len(rows)} строк из базы для Ozon")
         conn.close()
@@ -141,7 +147,10 @@ def update_wildberries():
     try:
         conn = sqlite3.connect('System/marketplace_base.db')
         cursor = conn.cursor()
-        cursor.execute("SELECT `WB Артикул`, `Цена WB` FROM wildberries WHERE `WB Артикул` IS NOT NULL AND `Цена WB` IS NOT NULL")
+        cursor.execute("""
+            SELECT `WB Артикул`, `Цена` FROM marketplace
+            WHERE `Маркетплейс` = 'wildberries' AND `WB Артикул` IS NOT NULL AND `Цена` IS NOT NULL
+        """)
         rows = cursor.fetchall()
         logger.debug(f"📥 Загружено {len(rows)} строк из базы для Wildberries")
         conn.close()

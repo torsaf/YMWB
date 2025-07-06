@@ -41,6 +41,26 @@ def send_telegram_message(message: str):
     )
 
 
+def disable_invask_if_needed():
+    supplier = "Invask"
+    if global_stock_flags["suppliers"].get(supplier, True):  # если включён — отключить
+        global_stock_flags["suppliers"][supplier] = False
+        with open(FLAGS_PATH, 'w') as f:
+            json.dump(global_stock_flags, f)
+        logger.info(f"🕐 Автоотключение поставщика {supplier}")
+    else:
+        logger.debug(f"ℹ️ {supplier} уже отключён — пропускаем")
+
+def enable_invask_if_needed():
+    supplier = "Invask"
+    if not global_stock_flags["suppliers"].get(supplier, True):  # если выключен — включить
+        global_stock_flags["suppliers"][supplier] = True
+        with open(FLAGS_PATH, 'w') as f:
+            json.dump(global_stock_flags, f)
+        logger.info(f"🕘 Автовключение поставщика {supplier}")
+    else:
+        logger.debug(f"ℹ️ {supplier} уже включён — пропускаем")
+
 def backup_database():
     os.makedirs("System/backups", exist_ok=True)
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
@@ -283,7 +303,6 @@ def toggle_supplier(supplier):
 
     logger.info(f"🔁 Поставщик {supplier} переключён: {'ON' if global_stock_flags['suppliers'][supplier] else 'OFF'}")
 
-    # Подключение к основным и временным базам
     conn_main = sqlite3.connect(DB_PATH)
     conn_temp = sqlite3.connect("System/temp_stock_backup.db")
     cursor_main = conn_main.cursor()
@@ -293,38 +312,49 @@ def toggle_supplier(supplier):
         table_backup = f"backup_supplier_{supplier}_{market}"
 
         try:
-            cursor_main.execute(f"SELECT Арт_MC, Нал FROM '{market}' WHERE Поставщик = ?", (supplier,))
+            cursor_main.execute(
+                "SELECT Арт_MC, Нал FROM marketplace WHERE Поставщик = ? AND Маркетплейс = ?",
+                (supplier, market)
+            )
             rows = cursor_main.fetchall()
 
             if not global_stock_flags["suppliers"][supplier]:
-                # Создать временную таблицу, если нет
+                # Создать таблицу бэкапа, если нет
                 cursor_temp.execute(f"""
                     CREATE TABLE IF NOT EXISTS {table_backup} (
                         Арт_MC TEXT PRIMARY KEY,
                         Нал INTEGER
                     )
                 """)
-                # Очистить перед вставкой (перезапись)
                 cursor_temp.execute(f"DELETE FROM {table_backup}")
 
-                # Сохранить остатки и обнулить
                 for art, nal in rows:
-                    cursor_temp.execute(f"""
-                        INSERT INTO {table_backup} (Арт_MC, Нал) VALUES (?, ?)
-                    """, (art, nal))
-                cursor_main.execute(f"""
-                    UPDATE '{market}' SET Нал = 0 WHERE Поставщик = ?
-                """, (supplier,))
+                    cursor_temp.execute(
+                        f"INSERT INTO {table_backup} (Арт_MC, Нал) VALUES (?, ?)",
+                        (art, nal)
+                    )
+
+                cursor_main.execute(
+                    "UPDATE marketplace SET Нал = 0 WHERE Поставщик = ? AND Маркетплейс = ?",
+                    (supplier, market)
+                )
             else:
                 for art, _ in rows:
-                    cursor_temp.execute(f"SELECT Нал FROM {table_backup} WHERE Арт_MC = ?", (art,))
+                    cursor_temp.execute(
+                        f"SELECT Нал FROM {table_backup} WHERE Арт_MC = ?",
+                        (art,)
+                    )
                     res = cursor_temp.fetchone()
                     if res:
                         nal = res[0]
-                        cursor_main.execute(f"""
-                            UPDATE '{market}' SET Нал = ? WHERE Арт_MC = ?
-                        """, (nal, art))
-                        cursor_temp.execute(f"DELETE FROM {table_backup} WHERE Арт_MC = ?", (art,))
+                        cursor_main.execute(
+                            "UPDATE marketplace SET Нал = ? WHERE Арт_MC = ? AND Поставщик = ? AND Маркетплейс = ?",
+                            (nal, art, supplier, market)
+                        )
+                        cursor_temp.execute(
+                            f"DELETE FROM {table_backup} WHERE Арт_MC = ?",
+                            (art,)
+                        )
         except Exception as e:
             logger.warning(f"❌ Ошибка обработки {supplier} в {market}: {e}")
 
@@ -334,6 +364,7 @@ def toggle_supplier(supplier):
     conn_temp.close()
 
     return '', 204
+
 
 @app.route('/')
 @requires_auth
@@ -354,13 +385,14 @@ def show_table(table_name):
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
     tables = [row[0] for row in cursor.fetchall()]
 
-    if sort_column:
-        query = f"SELECT * FROM '{table_name}'"
-    else:
+    if not sort_column:
         sort_column = "Модель"
         sort_order = "asc"
-        query = f"SELECT * FROM '{table_name}'"
-    df = pd.read_sql_query(query, conn)
+
+    query = "SELECT * FROM marketplace WHERE Маркетплейс = ?"
+    df = pd.read_sql_query(query, conn, params=(table_name,))
+    if "Маркетплейс" in df.columns:
+        df.drop(columns=["Маркетплейс"], inplace=True)
     search_term = request.args.get('search', '').strip().lower()
     if search_term:
         df = df[df.apply(lambda row: any(
@@ -377,6 +409,12 @@ def show_table(table_name):
             df = df[df['Модель'].str.lower().str.startswith(letter_filter)]
     if '_id' in df.columns:
         df.drop(columns=['_id'], inplace=True)
+    # Преобразуем "Дата изменения" в datetime для правильной сортировки
+    if "Дата изменения" in df.columns:
+        try:
+            df["Дата изменения"] = pd.to_datetime(df["Дата изменения"], format="%d.%m.%Y %H:%M", errors="coerce")
+        except Exception as e:
+            logger.warning(f"❌ Ошибка преобразования дат: {e}")
     if all(col in df.columns for col in ['Опт', 'Наценка']):
         def recalc_price(opt, markup):
             try:
@@ -387,9 +425,8 @@ def show_table(table_name):
             except:
                 return opt
 
-        for col in ['Цена YM', 'Цена OZ', 'Цена WB']:
-            if col in df.columns:
-                df[col] = df.apply(lambda row: recalc_price(row['Опт'], row['Наценка']), axis=1)
+        if 'Опт' in df.columns and 'Наценка' in df.columns and 'Цена' in df.columns:
+            df['Цена'] = df.apply(lambda row: recalc_price(row['Опт'], row['Наценка']), axis=1)
     conn.close()
 
     if sort_column and sort_column in df.columns:
@@ -399,6 +436,11 @@ def show_table(table_name):
             df = df.sort_values(by=sort_column, ascending=(sort_order == "asc"))
 
     df.insert(0, "№", range(1, len(df) + 1))
+    # Удаляем лишние столбцы для Yandex и Ozon
+    if table_name != "wildberries":
+        for col in ["WB Barcode", "WB Артикул"]:
+            if col in df.columns:
+                df.drop(columns=[col], inplace=True)
     # Если глобальный флаг отключен — принудительно ставим Нал = 0
     if not global_stock_flags.get(table_name, True):
         if 'Нал' in df.columns:
@@ -408,13 +450,7 @@ def show_table(table_name):
     in_stock = df[df['Нал'].astype(str).str.replace(r'\D', '', regex=True).astype(float) > 0].shape[0]
     disabled = df[df['Статус'].astype(str).str.lower() == 'выкл.'].shape[0]
 
-    # Выбор нужной колонки с ценой по таблице
-    price_col_map = {
-        'yandex': 'Цена YM',
-        'ozon': 'Цена OZ',
-        'wildberries': 'Цена WB'
-    }
-    price_col = price_col_map.get(table_name.lower(), 'Цена YM')
+    price_col = 'Цена'
 
     def safe_avg(col):
         try:
@@ -435,15 +471,19 @@ def show_table(table_name):
     }
 
     # 📌 Получаем список всех уникальных поставщиков (фиксированный список, не зависит от df)
+    # 📌 Получаем список всех уникальных поставщиков из общей таблицы
     conn_sup = sqlite3.connect(DB_PATH)
     try:
-        supplier_df = pd.read_sql_query("SELECT DISTINCT Поставщик FROM yandex", conn_sup)
+        supplier_df = pd.read_sql_query("SELECT DISTINCT Поставщик FROM marketplace", conn_sup)
         suppliers_list = sorted(s for s in supplier_df['Поставщик'].dropna().unique() if s.strip())
     except Exception:
         suppliers_list = []
     conn_sup.close()
 
     saved_form_data = session.pop('saved_form', {})
+    # Форматируем дату обратно в нужный вид (дд.мм.гггг чч:мм)
+    if "Дата изменения" in df.columns:
+        df["Дата изменения"] = df["Дата изменения"].dt.strftime("%d.%m.%Y %H:%M")
     has_errors = has_error_products()
 
     print("🔥 has_errors =", has_errors)
@@ -471,11 +511,11 @@ def delete_row(table, item_id):
     cursor = conn.cursor()
 
     # Получаем модель и Арт_MC до удаления
-    cursor.execute(f"SELECT Модель, Арт_MC FROM '{table}' WHERE Артикул = ?", (item_id,))
+    cursor.execute("SELECT Модель, Арт_MC FROM marketplace WHERE Артикул = ? AND Маркетплейс = ?", (item_id, table))
     result = cursor.fetchone()
     model, art_mc = result if result else ("", "")
 
-    cursor.execute(f"DELETE FROM '{table}' WHERE Артикул = ?", (item_id,))
+    cursor.execute("DELETE FROM marketplace WHERE Артикул = ? AND Маркетплейс = ?", (item_id, table))
     conn.commit()
     conn.close()
 
@@ -492,7 +532,7 @@ def update_row(table, item_id):
     # Получаем старые данные для сравнения
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute(f"SELECT * FROM '{table}' WHERE \"Арт_MC\" = ?", (item_id,))
+    cursor.execute("SELECT * FROM marketplace WHERE Арт_MC = ? AND Маркетплейс = ?", (item_id, table))
     row = cursor.fetchone()
     column_names = [description[0] for description in cursor.description]
     old_data = dict(zip(column_names, row)) if row else {}
@@ -512,16 +552,7 @@ def update_row(table, item_id):
     stock_old = int(old_data.get("Нал", 0))
     price_old = 0
 
-    table_price_column = {
-        "yandex": "Цена YM",
-        "ozon": "Цена OZ",
-        "wildberries": "Цена WB"
-    }.get(table, "Цена YM")
-
-    try:
-        price_old = int(old_data.get(table_price_column, 0))
-    except:
-        price_old = 0
+    price_old = int(old_data.get("Цена", 0) or 0)
 
     try:
         stock_new = int(data.get("Нал", 0))
@@ -559,13 +590,11 @@ def update_row(table, item_id):
         # Получаем список колонок таблицы
         conn_check = sqlite3.connect(DB_PATH)
         cur_check = conn_check.cursor()
-        cur_check.execute(f"PRAGMA table_info('{table}')")
+        cur_check.execute("PRAGMA table_info(marketplace)")
         table_columns = [col[1] for col in cur_check.fetchall()]
         conn_check.close()
 
-        for col in ['Цена YM', 'Цена OZ', 'Цена WB']:
-            if col in table_columns:
-                data[col] = formatted_price
+        data['Цена'] = formatted_price  # В новой структуре колонка 'Цена' всегда есть
 
         if 'Наценка' in data:
             data['Наценка'] = str(int(markup))
@@ -575,8 +604,8 @@ def update_row(table, item_id):
 
     # Ключевые поля, которые влияют на "Дата изменения"
     important_fields = [
-        "Поставщик", "Артикул", "Модель", "Статус", "Нал", "Опт", "Наценка", "Комментарий",
-        "Цена YM", "Цена OZ", "Цена WB", "WB Артикул", "WB Barcode"
+        "Поставщик", "Артикул", "Модель", "Статус", "Нал", "Опт", "Наценка", "Комментарий", "Цена", "WB Артикул",
+        "WB Barcode"
     ]
 
     # Подготовка к сравнению
@@ -604,8 +633,8 @@ def update_row(table, item_id):
     cursor = conn.cursor()
     try:
         cursor.execute(
-            f"UPDATE '{table}' SET {update_clause} WHERE \"Арт_MC\" = ?",
-            values + [item_id]
+            f"UPDATE marketplace SET {update_clause} WHERE Арт_MC = ? AND Маркетплейс = ?",
+            values + [item_id, table]
         )
         conn.commit()
         logger.debug(f"🧾 Кол-во обновлённых строк: {cursor.rowcount}")
@@ -668,14 +697,17 @@ def add_item(table_name):
     wb_barcode = data.get('WB Barcode', '').strip()
     wb_artikul = data.get('WB Артикул', '').strip()
 
-    cursor.execute(f"""
-        SELECT COUNT(*) FROM '{table_name}'
-        WHERE Арт_MC = ?
-           OR Артикул = ?
-           OR Модель = ?
-           OR "WB Barcode" = ?
-           OR "WB Артикул" = ?
-    """, (art_mc, artikul, model, wb_barcode, wb_artikul))
+    cursor.execute("""
+        SELECT COUNT(*) FROM marketplace
+        WHERE Маркетплейс = ?
+          AND (
+            Арт_MC = ?
+            OR Артикул = ?
+            OR Модель = ?
+            OR "WB Barcode" = ?
+            OR "WB Артикул" = ?
+        )
+    """, (table_name, art_mc, artikul, model, wb_barcode, wb_artikul))
     existing_count = cursor.fetchone()[0]
 
     if existing_count > 0:
@@ -698,24 +730,18 @@ def add_item(table_name):
         data['Наценка'] = str(int(markup))
         data['Нал'] = str(stock)
 
-        cursor.execute(f"PRAGMA table_info('{table_name}')")
-        table_columns = [col[1] for col in cursor.fetchall()]
-
-        if 'Цена YM' in table_columns:
-            data['Цена YM'] = str(price_ym)
-        if 'Цена OZ' in table_columns:
-            data['Цена OZ'] = str(price_ym)
-        if 'Цена WB' in table_columns:
-            data['Цена WB'] = str(price_ym)
+        data['Цена'] = str(price_ym)
 
         # Устанавливаем дату изменения только перед вставкой
         data["Дата изменения"] = datetime.now().strftime("%d.%m.%Y %H:%M")
+
+        data["Маркетплейс"] = table_name  # добавляем до формирования списков
 
         columns = list(data.keys())
         values = [data[col] for col in columns]
         placeholders = ", ".join(["?"] * len(columns))
         escaped_columns = [f'"{col}"' for col in columns]
-        insert_query = f"INSERT INTO '{table_name}' ({', '.join(escaped_columns)}) VALUES ({placeholders})"
+        insert_query = f"INSERT INTO marketplace ({', '.join(escaped_columns)}) VALUES ({placeholders})"
 
         cursor.execute(insert_query, values)
         conn.commit()
@@ -737,53 +763,47 @@ def add_item(table_name):
 def show_statistic():
     logger.info("📈 Открыта страница статистики")
     conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
+    df = pd.read_sql_query("SELECT Арт_MC, Поставщик, Артикул, Модель, Статус, Маркетплейс, Опт, Нал FROM marketplace", conn)
+    conn.close()
 
-    tables = ['yandex', 'ozon', 'wildberries']
     data = {}
     supplier_stats = {}
 
-    # === Формирование общей таблицы размещений и статистики по поставщикам ===
-    for table in tables:
-        df = pd.read_sql_query(f"SELECT Арт_MC, Поставщик, Артикул, Модель, Статус FROM '{table}'", conn)
-        for _, row in df.iterrows():
-            key = row['Арт_MC']
-            supplier = row.get('Поставщик', 'Неизвестно')
-            status = (row.get('Статус') or '').strip().lower()
+    for _, row in df.iterrows():
+        art_mc = row['Арт_MC']
+        supplier = row.get('Поставщик', 'Неизвестно')
+        status = (row.get('Статус') or '').strip().lower()
+        mp = row.get('Маркетплейс', '').capitalize()
 
-            if key not in data:
-                data[key] = {
-                    'Арт_MC': key,
-                    'Поставщик': supplier,
-                    'Артикул': row.get('Артикул', ''),
-                    'Модель': row.get('Модель', '')
-                }
+        if art_mc not in data:
+            data[art_mc] = {
+                'Арт_MC': art_mc,
+                'Поставщик': supplier,
+                'Артикул': row.get('Артикул', ''),
+                'Модель': row.get('Модель', '')
+            }
 
-            mp = table.capitalize()
-            data[key][mp] = True
-            if status == 'выкл.':
-                data[key][f'Статус_{mp}'] = 'выкл.'
+        data[art_mc][mp] = True
+        if status == 'выкл.':
+            data[art_mc][f'Статус_{mp}'] = 'выкл.'
 
-            if supplier not in supplier_stats:
-                supplier_stats[supplier] = {
-                    'Yandex': 0,
-                    'Ozon': 0,
-                    'Wildberries': 0,
-                    'Всего': 0,
-                    'Активно': 0,
-                    'Неактивно': 0
-                }
+        if supplier not in supplier_stats:
+            supplier_stats[supplier] = {
+                'Yandex': 0,
+                'Ozon': 0,
+                'Wildberries': 0,
+                'Всего': 0,
+                'Активно': 0,
+                'Неактивно': 0
+            }
 
-            supplier_stats[supplier][mp] += 1
-            supplier_stats[supplier]['Всего'] += 1
-            if status == 'выкл.':
-                supplier_stats[supplier]['Неактивно'] += 1
-            else:
-                supplier_stats[supplier]['Активно'] += 1
+        supplier_stats[supplier][mp] += 1
+        supplier_stats[supplier]['Всего'] += 1
+        if status == 'выкл.':
+            supplier_stats[supplier]['Неактивно'] += 1
+        else:
+            supplier_stats[supplier]['Активно'] += 1
 
-    conn.close()
-
-    # === Анализ ошибок между маркетплейсами ===
     errors = detect_errors_across_marketplaces()
 
     return render_template(
@@ -795,74 +815,47 @@ def show_statistic():
 
 
 
+
 def has_error_products():
     errors = detect_errors_across_marketplaces()
     return len(errors) > 0
 
 def detect_errors_across_marketplaces():
     conn = sqlite3.connect(DB_PATH)
-    dfs = []
-    for table in ['yandex', 'ozon', 'wildberries']:
-        try:
-            df = pd.read_sql_query(f"SELECT * FROM '{table}'", conn)
-            df["Источник"] = table.capitalize()
-            dfs.append(df)
-        except Exception as e:
-            logger.warning(f"Ошибка при чтении таблицы {table}: {e}")
+    df = pd.read_sql_query("SELECT * FROM marketplace", conn)
     conn.close()
 
-    if not dfs:
+    if df.empty:
         return []
 
-    all_data = pd.concat(dfs, ignore_index=True)
-    all_data = all_data.dropna(subset=["Арт_MC"])
-    all_data["Арт_MC"] = all_data["Арт_MC"].astype(str).str.strip()
+    df["Источник"] = df["Маркетплейс"].str.capitalize()
 
-    duplicates = all_data[all_data.duplicated(subset=["Арт_MC"], keep=False)]
-    grouped = duplicates.groupby("Арт_MC")
-    logger.debug(f"🔍 Найдено групп с повторяющимся Арт_MC: {len(grouped)}")
+    grouped = df.groupby("Арт_MC")
+    error_groups = []
 
-    errors = []
     for art_mc, group in grouped:
-        nal_values = group["Нал"].astype(str).str.lower().str.strip().tolist()
-        status_values = group["Статус"].astype(str).str.lower().str.strip().tolist()
-        article_values = group["Артикул"].astype(str).str.lower().str.strip().tolist()
-        model_values = group["Модель"].astype(str).str.lower().str.strip().tolist()
-        opt_values = group["Опт"].astype(str).str.strip().tolist()
-        supplier_values = group["Поставщик"].astype(str).str.lower().str.strip().tolist()
+        if len(group) <= 1:
+            continue
 
-        has_diff = (
-            len(set(nal_values)) > 1
-            or len(set(status_values)) > 1
-            or len(set(article_values)) > 1
-            or len(set(model_values)) > 1
-            or len(set(opt_values)) > 1
-            or len(set(supplier_values)) > 1
+        records = group.to_dict(orient="records")
+        fields_to_check = ["Поставщик", "Артикул", "Модель", "Статус", "Нал", "Опт"]
+
+        # проверяем: есть ли хоть одно поле, в котором различаются значения
+        has_differences = any(
+            len(set(str(r.get(field, '')).strip() for r in records)) > 1
+            for field in fields_to_check
         )
 
-        if has_diff:
-            diff_flags = {
-                "Нал": len(set(nal_values)) > 1,
-                "Статус": len(set(status_values)) > 1,
-                "Артикул": len(set(article_values)) > 1,
-                "Модель": len(set(model_values)) > 1,
-                "Опт": len(set(opt_values)) > 1,
-                "Поставщик": len(set(supplier_values)) > 1,
-            }
+        if has_differences:
+            for item in records:
+                diff = {}
+                for field in fields_to_check:
+                    values = set(str(r.get(field, '')).strip() for r in records)
+                    diff[field] = len(values) > 1
+                item['diff'] = diff
+                error_groups.append(item)
 
-            for _, row in group.iterrows():
-                errors.append({
-                    "Арт_MC": row["Арт_MC"],
-                    "Маркетплейс": row["Источник"],
-                    "Статус": row.get("Статус", ""),
-                    "Нал": row.get("Нал", ""),
-                    "Поставщик": row.get("Поставщик", ""),
-                    "Артикул": row.get("Артикул", ""),
-                    "Модель": row.get("Модель", ""),
-                    "Опт": row.get("Опт", ""),
-                    "diff": diff_flags
-                })
-    return errors
+    return error_groups
 
 
 
@@ -903,6 +896,8 @@ if __name__ == '__main__':
         scheduler = BackgroundScheduler()
         scheduler.add_job(update_sklad_task, 'interval', minutes=5)
         scheduler.add_job(backup_database, 'cron', hour=2)  # каждый день в 2 ночи
+        scheduler.add_job(disable_invask_if_needed, 'cron', day_of_week='fri', hour=1, minute=0) # Пятница 01:00
+        scheduler.add_job(enable_invask_if_needed, 'cron', day_of_week='sun', hour=23, minute=0) # Воскресенье 23:00
         scheduler.start()
         logger.info("📅 Планировщик запущен (обновление склада каждые 5 минут)")
     logger.info("🚀 Приложение запущено")

@@ -439,12 +439,12 @@
 
         /* 🟣 Специальные ширины для таблицы Wildberries */
         .header-wildberries ~ .table-wrapper .main-table td:nth-child(1) { width: 20px !important; }   /* № */
-        .header-wildberries ~ .table-wrapper .main-table td:nth-child(2) { width: 80px !important; }   /* Арт_MC */
+        .header-wildberries ~ .table-wrapper .main-table td:nth-child(2) { width: 70px !important; }   /* Арт_MC */
         .header-wildberries ~ .table-wrapper .main-table td:nth-child(3) { width: 115px !important; }  /* WB Barcode */
         .header-wildberries ~ .table-wrapper .main-table td:nth-child(4) { width: 87px !important; }   /* WB Артикул */
         .header-wildberries ~ .table-wrapper .main-table td:nth-child(5) { width: 80px !important; }   /* Поставщик */
         .header-wildberries ~ .table-wrapper .main-table td:nth-child(6) { width: 72px !important; }   /* Артикул */
-        .header-wildberries ~ .table-wrapper .main-table td:nth-child(7) { width: 243px !important; }  /* Модель */
+        .header-wildberries ~ .table-wrapper .main-table td:nth-child(7) { width: 253px !important; }  /* Модель */
         .header-wildberries ~ .table-wrapper .main-table td:nth-child(8) { width: 50px !important; }   /* Статус */
         .header-wildberries ~ .table-wrapper .main-table td:nth-child(9) { width: 30px !important; }   /* Нал */
         .header-wildberries ~ .table-wrapper .main-table td:nth-child(10) { width: 70px !important; }  /* Опт */
@@ -775,7 +775,7 @@
                 <form method="POST" action="/add/{{ selected_table }}" style="display: contents;">
                   {% for col in table_data.columns %}
                     <div class="input-cell {% if col.strip() == 'Модель' %}text-left{% else %}text-center{% endif %}">
-                      {% if col.strip() not in ['№', 'Цена YM', 'Цена OZ', 'Цена WB', 'Дата изменения'] %}
+                      {% if col.strip() not in ['№', 'Дата изменения'] %}
                         {% if col.strip() == 'Поставщик' %}
                           <select name="Поставщик">
                               <option value=""></option>
@@ -821,7 +821,7 @@
                         {% set value = item if item is not none else '' %}
                         <td class="{% if col.strip() == 'Модель' %}text-left{% elif col.strip() == 'Комментарий' %}comment-cell{% else %}text-center{% endif %}{% if col.strip() in ['Поставщик', 'Артикул'] %} text-muted{% endif %}"
                             {% if col.strip() in ['Модель', 'Комментарий'] and value|length > 35 %}title="{{ value }}"{% endif %}>
-                          {% if col.strip() in ['Опт', 'Цена YM', 'Цена OZ', 'Цена WB'] %}
+                          {% if col.strip() in ['Опт', 'Цена'] %}
                             {% if value is number %}
                               {{ '{:,.0f} р.'.format(value).replace(',', ' ') }}
                             {% else %}
@@ -1036,7 +1036,7 @@
             const itemId = cells[indexOfArtMC].innerText.trim();
 
 
-            const numericFields = ['Опт', 'Цена YM', 'Цена OZ', 'Цена WB', 'Наценка', 'Нал'];
+            const numericFields = ['Опт', 'Цена', 'Наценка', 'Нал'];
             const recalcPrices = () => {
                 const optInput = row.querySelector('input[name="Опт"]');
                 const markupInput = row.querySelector('input[name="Наценка"]');
@@ -1046,7 +1046,7 @@
 
                 if (!isNaN(opt) && !isNaN(markup)) {
                     const newPrice = Math.round(opt + (opt * markup / 100));
-                    ['Цена YM', 'Цена OZ', 'Цена WB'].forEach(field => {
+                    ['Цена'].forEach(field => {
                         const td = row.querySelector(`td[data-price-target="${field}"]`);
                         if (td) {
                             td.innerText = newPrice.toLocaleString('ru-RU') + ' р.';
@@ -1067,10 +1067,11 @@
                 }
                 const val = td.innerText.trim();
 
-                const skipInputFields = ['№', 'Цена YM', 'Цена OZ', 'Цена WB', 'Дата изменения'];
+                const skipInputFields = ['№', 'Цена', 'Дата изменения'];
+
                 if (!headers[i] || skipInputFields.includes(headers[i])) {
-                    if (['Цена YM', 'Цена OZ', 'Цена WB'].includes(headers[i])) {
-                        td.setAttribute('data-price-target', headers[i]); // 💡 помечаем td
+                    if (headers[i] === 'Цена') {
+                        td.setAttribute('data-price-target', 'Цена');  // 💡 Помечаем td для JS-пересчёта
                     }
                     continue;
                 }

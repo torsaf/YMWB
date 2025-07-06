@@ -49,22 +49,17 @@ telegram = get_notifier('telegram')
 
 def update_stock(articul, platform):
     logger.info(f"🔁 Вычитание со склада: {articul} | Платформа: {platform}")
+    platform = platform.lower()
     db_path = "System/marketplace_base.db"
     conn = sqlite3.connect(db_path, timeout=10)
     articul = str(articul).strip()
 
-    platform_table_map = {
-        'Yandex': 'yandex',
-        'Ozon': 'ozon',
-        'Wildberries': 'wildberries'
-    }
+    df = pd.read_sql_query(
+        "SELECT * FROM marketplace WHERE Арт_MC = ? AND Маркетплейс = ?",
+        conn,
+        params=(articul, platform)
+    )
 
-    table = platform_table_map.get(platform)
-    if not table:
-        conn.close()
-        return
-
-    df = pd.read_sql_query(f"SELECT * FROM '{table}' WHERE Арт_MC = ?", conn, params=(articul,))
     if df.empty:
         conn.close()
         return
@@ -81,13 +76,7 @@ def update_stock(articul, platform):
     supplier = row.get("Поставщик", "N/A")
     opt_price = format_price(row.get("Опт"))
     artikul_alt = row.get("Артикул", "")
-    price_field_map = {
-        'yandex': 'Цена YM',
-        'ozon': 'Цена OZ',
-        'wildberries': 'Цена WB'
-    }
-    rrc_field = price_field_map.get(table)
-    rrc_price = format_price(row.get(rrc_field))
+    rrc_price = format_price(row.get("Цена", None))
 
     if supplier.lower() == 'sklad':
         try:
@@ -138,7 +127,10 @@ def update_stock(articul, platform):
     else:
         new_stock = max(0, stock - 1)
         cur = conn.cursor()
-        cur.execute(f"UPDATE '{table}' SET Нал = ? WHERE Арт_MC = ?", (new_stock, articul))
+        cur.execute(
+            "UPDATE marketplace SET Нал = ?, \"Дата изменения\" = ? WHERE Арт_MC = ? AND Маркетплейс = ?",
+            (new_stock, datetime.now().strftime("%d.%m.%Y %H:%M"), articul, platform)
+        )
         conn.commit()
         logger.success(f"✅ Остаток обновлён: {articul} | {stock} → {new_stock}")
 
@@ -184,7 +176,7 @@ def get_orders_yandex_market():
     url_ym = f'https://api.partner.market.yandex.ru/campaigns/{campaign_id}/orders'
     headers = {"Authorization": f"Bearer {ym_token}"}
     params = {
-        "fake": "false",
+        "fake": "False",
         "status": "PROCESSING",
         "substatus": "STARTED"
     }
@@ -286,18 +278,17 @@ file_path = 'System/order_ids.txt'
 
 # Функция, которая берет название товара из файла, когда есть заказ с WB
 def get_product(nmId):
-    """Получает название модели из таблицы wildberries по WB Артикулу."""
+    """Получает название модели из таблицы marketplace по WB Артикулу."""
     db_path = 'System/marketplace_base.db'
     try:
         conn = sqlite3.connect(db_path, timeout=10)
         cursor = conn.cursor()
-        # Поиск строки по значению "WB Артикул"
-        cursor.execute("SELECT Модель FROM wildberries WHERE [WB Артикул] = ?", (str(nmId),))
+        cursor.execute("""
+            SELECT Модель FROM marketplace 
+            WHERE [WB Артикул] = ? AND Маркетплейс = 'Wildberries'
+        """, (str(nmId),))
         result = cursor.fetchone()
-        if result:
-            return result[0]  # Модель
-        else:
-            return None
+        return result[0] if result else None
     except Exception as e:
         logger.error(f"❌ Ошибка при получении модели из базы данных: {e}")
         return None
@@ -307,74 +298,155 @@ def get_product(nmId):
 
 def notify_about_new_orders(orders, platform, supplier):
     if not orders:
-        pass
-        # message = f"Новых заказов на {platform} от {supplier} нет."
-        # telegram.notify(token=telegram_got_token, chat_id=telegram_chat_id, message=message)
-    else:
-        for order in orders:
-            # Запись ID заказа в файл перед добавлением товаров в сообщение
-            order_id = order.get('posting_number') if supplier == 'Ozon' else order.get('id')
-            # Запись ID заказа в файл перед добавлением товаров в сообщение
-            if write_order_id_to_file(order_id, file_path):
-                logger.info(f"📦 Новый заказ: {order_id} ({platform})")
-                message = f"📦 Новый заказ на *{platform}*:\n\n"
-                message += f"ID заказа: {order_id}\n"
-                if supplier == 'Yandex':
-                    # Добавляем дату отгрузки
-                    shipment_date = next(
-                        (shipment.get('shipmentDate') for shipment in order.get('delivery', {}).get('shipments', [])),
-                        'Не указано'
-                    )
-                    message += f"Дата отгрузки: {shipment_date}\n"
-                    for item in order.get('items', []):
-                        # Артикул товара
-                        offer_id = item.get('offerId', 'Не указан')
-                        # Имя товара
-                        offer_name = item.get('offerName', 'Не указано')
-                        # Цена товара
-                        subsidy_amount = next(
-                            (subsidy.get('amount') for subsidy in item.get('subsidies', []) if
-                             subsidy.get('type') == 'SUBSIDY'), 0
-                        )
-                        price = int(item.get('buyerPrice', 0))
-                        total_price = int(subsidy_amount + price)
-                        # Добавляем информацию о товаре
-                        message += f"Артикул: {offer_id}\n"
-                        message += f"Товар: {offer_name}\n"
-                        message_minus_odin = offer_id
-                        message += f"Цена: {total_price} р.\n"
-                elif supplier == 'Wildberries':
-                    message += f"Артикул: {order.get('article')} \n"
-                    message += f"Товар: {get_product(order.get('nmId'))} \n"
-                    message += f"Цена: {str(order.get('convertedPrice'))[:-2]} р.\n"
-                    message_minus_odin = order.get('article')
-                elif supplier == 'Ozon':  # Добавляем поддержку Ozon
-                    shipment_date_raw = order.get('shipment_date')  # Получаем дату отгрузки
-                    # Преобразуем дату из ISO 8601 в формат DD.MM.YYYY
-                    if shipment_date_raw:
-                        shipment_date = datetime.strptime(shipment_date_raw, "%Y-%m-%dT%H:%M:%SZ").strftime("%d.%m.%Y")
-                        message += f"Дата отгрузки: {shipment_date}\n"
-                    else:
-                        shipment_date = "Не указана"
-                        message += f"Дата отгрузки: {shipment_date}\n"
+        return
 
-                    for product in order.get('products', []):
-                        message += f"Артикул: {product['offer_id']}\n"
-                        message += f"Товар: {product['name']}\n"  # Получаем название товара
-                        # Округляем цену до целого числа, чтобы убрать ".0000"
-                        price = int(float(product['price']))
-                        message += f"Цена: {price} р.\n"  # Форматируем цену
-                        message_minus_odin = product.get('offer_id')
+    for order in orders:
+        order_id = order.get('posting_number') if supplier == 'Ozon' else order.get('id')
+        if not write_order_id_to_file(order_id, file_path):
+            continue  # заказ уже обработан
 
-                message += '\n'
-                telegram.notify(token=telegram_got_token, chat_id=telegram_chat_id, message=message,
-                                parse_mode='markdown')
-                # Затем вычитаем товар со склада
-                if message_minus_odin:  # Если товар определён
-                    logger.debug(f"🔧 Вызываем update_stock для {message_minus_odin} | Платформа: {platform}")
-                    update_stock(message_minus_odin, platform)
-                message1 = '📦'
-                telegram.notify(token=telegram_got_token, chat_id=telegram_chat_id, message=message1)
+        logger.info(f"📦 Новый заказ: {order_id} ({platform})")
+
+        message = f"📦 Новый заказ на *{platform}*:\n\n"
+        message += f"ID заказа: {order_id}\n"
+
+        items_to_update = []
+
+        if supplier == 'Yandex':
+            shipment_date = next(
+                (shipment.get('shipmentDate') for shipment in order.get('delivery', {}).get('shipments', [])),
+                'Не указано'
+            )
+            message += f"Дата отгрузки: {shipment_date}\n"
+
+            for item in order.get('items', []):
+                offer_id = item.get('offerId', 'Не указан')
+                offer_name = item.get('offerName', 'Не указано')
+                subsidy_amount = next(
+                    (subsidy.get('amount') for subsidy in item.get('subsidies', []) if
+                     subsidy.get('type') == 'SUBSIDY'), 0
+                )
+                price = int(item.get('buyerPrice', 0))
+                total_price = int(subsidy_amount + price)
+
+                message += f"\nАртикул: {offer_id}\n"
+                message += f"Товар: {offer_name}\n"
+                message += f"Цена: {total_price} р.\n"
+                items_to_update.append(offer_id)
+
+        elif supplier == 'Wildberries':
+            article = order.get('article')
+            model = get_product(order.get('nmId'))
+            price = str(order.get('convertedPrice'))[:-2]
+
+            message += f"Артикул: {article}\n"
+            message += f"Товар: {model}\n"
+            message += f"Цена: {price} р.\n"
+            items_to_update.append(article)
+
+        elif supplier == 'Ozon':
+            shipment_date_raw = order.get('shipment_date')
+            shipment_date = "Не указана"
+            if shipment_date_raw:
+                try:
+                    shipment_date = datetime.strptime(shipment_date_raw, "%Y-%m-%dT%H:%M:%SZ").strftime("%d.%m.%Y")
+                except Exception:
+                    pass
+            message += f"Дата отгрузки: {shipment_date}\n"
+
+            for product in order.get('products', []):
+                offer_id = product.get('offer_id')
+                product_name = product.get('name', 'Не указано')
+                price = int(float(product.get('price', 0)))
+
+                message += f"\nАртикул: {offer_id}\n"
+                message += f"Товар: {product_name}\n"
+                message += f"Цена: {price} р.\n"
+                items_to_update.append(offer_id)
+
+        # 1. Отправляем сообщение о заказе
+        telegram.notify(token=telegram_got_token, chat_id=telegram_chat_id, message=message, parse_mode='markdown')
+
+        # 2. Вычитаем со склада
+        for offer_id in items_to_update:
+            logger.debug(f"🔧 Вызываем update_stock для {offer_id} | Платформа: {platform}")
+            update_stock(offer_id, platform)
+
+        # 3. Сообщаем об успешном вычитании
+        telegram.notify(token=telegram_got_token, chat_id=telegram_chat_id, message="📦")
+
+
+
+# def notify_about_new_orders(orders, platform, supplier):
+#     if not orders:
+#         pass
+#         # message = f"Новых заказов на {platform} от {supplier} нет."
+#         # telegram.notify(token=telegram_got_token, chat_id=telegram_chat_id, message=message)
+#     else:
+#         for order in orders:
+#             # Запись ID заказа в файл перед добавлением товаров в сообщение
+#             order_id = order.get('posting_number') if supplier == 'Ozon' else order.get('id')
+#             # Запись ID заказа в файл перед добавлением товаров в сообщение
+#             if write_order_id_to_file(order_id, file_path):
+#                 logger.info(f"📦 Новый заказ: {order_id} ({platform})")
+#                 message = f"📦 Новый заказ на *{platform}*:\n\n"
+#                 message += f"ID заказа: {order_id}\n"
+#                 if supplier == 'Yandex':
+#                     # Добавляем дату отгрузки
+#                     shipment_date = next(
+#                         (shipment.get('shipmentDate') for shipment in order.get('delivery', {}).get('shipments', [])),
+#                         'Не указано'
+#                     )
+#                     message += f"Дата отгрузки: {shipment_date}\n"
+#                     for item in order.get('items', []):
+#                         # Артикул товара
+#                         offer_id = item.get('offerId', 'Не указан')
+#                         # Имя товара
+#                         offer_name = item.get('offerName', 'Не указано')
+#                         # Цена товара
+#                         subsidy_amount = next(
+#                             (subsidy.get('amount') for subsidy in item.get('subsidies', []) if
+#                              subsidy.get('type') == 'SUBSIDY'), 0
+#                         )
+#                         price = int(item.get('buyerPrice', 0))
+#                         total_price = int(subsidy_amount + price)
+#                         # Добавляем информацию о товаре
+#                         message += f"Артикул: {offer_id}\n"
+#                         message += f"Товар: {offer_name}\n"
+#                         message_minus_odin = offer_id
+#                         message += f"Цена: {total_price} р.\n"
+#                 elif supplier == 'Wildberries':
+#                     message += f"Артикул: {order.get('article')} \n"
+#                     message += f"Товар: {get_product(order.get('nmId'))} \n"
+#                     message += f"Цена: {str(order.get('convertedPrice'))[:-2]} р.\n"
+#                     message_minus_odin = order.get('article')
+#                 elif supplier == 'Ozon':  # Добавляем поддержку Ozon
+#                     shipment_date_raw = order.get('shipment_date')  # Получаем дату отгрузки
+#                     # Преобразуем дату из ISO 8601 в формат DD.MM.YYYY
+#                     if shipment_date_raw:
+#                         shipment_date = datetime.strptime(shipment_date_raw, "%Y-%m-%dT%H:%M:%SZ").strftime("%d.%m.%Y")
+#                         message += f"Дата отгрузки: {shipment_date}\n"
+#                     else:
+#                         shipment_date = "Не указана"
+#                         message += f"Дата отгрузки: {shipment_date}\n"
+#
+#                     for product in order.get('products', []):
+#                         message += f"Артикул: {product['offer_id']}\n"
+#                         message += f"Товар: {product['name']}\n"  # Получаем название товара
+#                         # Округляем цену до целого числа, чтобы убрать ".0000"
+#                         price = int(float(product['price']))
+#                         message += f"Цена: {price} р.\n"  # Форматируем цену
+#                         message_minus_odin = product.get('offer_id')
+#
+#                 message += '\n'
+#                 telegram.notify(token=telegram_got_token, chat_id=telegram_chat_id, message=message,
+#                                 parse_mode='markdown')
+#                 # Затем вычитаем товар со склада
+#                 if message_minus_odin:  # Если товар определён
+#                     logger.debug(f"🔧 Вызываем update_stock для {message_minus_odin} | Платформа: {platform}")
+#                     update_stock(message_minus_odin, platform)
+#                 message1 = '📦'
+#                 telegram.notify(token=telegram_got_token, chat_id=telegram_chat_id, message=message1)
 
 
 def check_for_new_orders():

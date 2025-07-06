@@ -6,13 +6,11 @@ from logger_config import logger
 def generate_unlisted():
     """Формирует DataFrame с товарами, которых нет на маркетплейсах и не от 'Sklad'."""
     try:
-        # Подключение к базе маркетплейсов
+        # Подключение к базе marketplace
         with sqlite3.connect('System/marketplace_base.db') as mp_conn:
-            ozon_df = pd.read_sql_query("SELECT Артикул FROM ozon", mp_conn)
-            wb_df = pd.read_sql_query("SELECT Артикул FROM wildberries", mp_conn)
-            ym_df = pd.read_sql_query("SELECT Артикул FROM yandex", mp_conn)
+            listed_df = pd.read_sql_query("SELECT Артикул FROM marketplace", mp_conn)
 
-        all_listed_articles = pd.concat([ozon_df, wb_df, ym_df])['Артикул'].dropna().unique()
+        all_listed_articles = listed_df['Артикул'].dropna().unique()
 
         # Подключение к базе всех товаров
         with sqlite3.connect('System/!YMWB.db') as all_conn:

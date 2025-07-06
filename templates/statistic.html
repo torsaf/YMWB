@@ -106,6 +106,9 @@
             background-color: #fff3cd;
             font-weight: bold;
         }
+        th[onclick] {
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -119,17 +122,17 @@
     <div class="content">
         <div id="products" class="tab-content">
             <h2>Статистика размещения товаров по маркетплейсам</h2>
-            <table>
+            <table id="products-table">
                 <thead>
                     <tr>
-                        <th>№</th>
-                        <th>Арт_MC</th>
-                        <th>Поставщик</th>
-                        <th>Артикул</th>
-                        <th class="text-left">Модель</th>
-                        <th>Yandex</th>
-                        <th>Ozon</th>
-                        <th>Wildberries</th>
+                        <th onclick="sortTable(0)">№</th>
+                        <th onclick="sortTable(1)">Арт_MC</th>
+                        <th onclick="sortTable(2)">Поставщик</th>
+                        <th onclick="sortTable(3)">Артикул</th>
+                        <th class="text-left" onclick="sortTable(4)">Модель</th>
+                        <th onclick="sortTable(5)">Yandex</th>
+                        <th onclick="sortTable(6)">Ozon</th>
+                        <th onclick="sortTable(7)">Wildberries</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -209,6 +212,7 @@
                         <th>Поставщик</th>
                         <th>Артикул</th>
                         <th>Модель</th>
+                        <th>Статус</th>
                         <th>Нал</th>
                         <th>Опт</th>
                     </tr>
@@ -221,6 +225,7 @@
                         <td class="{% if error.diff['Поставщик'] %}diff-cell{% endif %}">{{ error['Поставщик'] }}</td>
                         <td class="{% if error.diff['Артикул'] %}diff-cell{% endif %}">{{ error['Артикул'] }}</td>
                         <td class="{% if error.diff['Модель'] %}diff-cell{% endif %}">{{ error['Модель'] }}</td>
+                        <td class="{% if error.diff['Статус'] %}diff-cell{% endif %}">{{ error['Статус'] }}</td>
                         <td class="{% if error.diff['Нал'] %}diff-cell{% endif %}">{{ error['Нал'] }}</td>
                         <td class="{% if error.diff['Опт'] %}diff-cell{% endif %}">{{ error['Опт'] }}</td>
                     </tr>
@@ -240,5 +245,32 @@ function switchTab(tabId) {
     event.currentTarget.classList.add('active');
 }
 </script>
+<script>
+function sortTable(columnIndex) {
+    const table = document.getElementById("products-table");
+    const tbody = table.tBodies[0];
+    const rows = Array.from(tbody.querySelectorAll("tr"));
+    const isAsc = table.getAttribute("data-sort-col") == columnIndex && table.getAttribute("data-sort-dir") !== "desc";
+
+    rows.sort((a, b) => {
+        const cellA = a.cells[columnIndex].textContent.trim().toLowerCase();
+        const cellB = b.cells[columnIndex].textContent.trim().toLowerCase();
+
+        if (!isNaN(cellA) && !isNaN(cellB)) {
+            return isAsc ? cellA - cellB : cellB - cellA;
+        }
+
+        return isAsc
+            ? cellA.localeCompare(cellB, 'ru')
+            : cellB.localeCompare(cellA, 'ru');
+    });
+
+    table.setAttribute("data-sort-col", columnIndex);
+    table.setAttribute("data-sort-dir", isAsc ? "desc" : "asc");
+
+    rows.forEach(row => tbody.appendChild(row));
+}
+</script>
+
 </body>
 </html>

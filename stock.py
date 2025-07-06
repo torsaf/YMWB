@@ -54,37 +54,52 @@ def gen_sklad():
     wb_final, ym_final, oz_final = [], [], []
 
     try:
-        df_wb = pd.read_sql_query("SELECT `WB Barcode`, `Нал` FROM wildberries WHERE `WB Barcode` IS NOT NULL AND `Нал` IS NOT NULL", conn)
-        logger.success(f"✅ Wildberries: загружено {len(df_wb)} строк")
-        wb_final = [{"sku": str(row['WB Barcode']).strip(), "amount": int(row['Нал'])} for _, row in df_wb.iterrows()]
-    except Exception as e:
-        logger.error(f"❌ Ошибка при чтении WB: {e}")
+        df = pd.read_sql_query("""
+            SELECT Маркетплейс, Арт_MC, `WB Barcode`, Нал
+            FROM marketplace
+            WHERE Нал IS NOT NULL
+        """, conn)
 
-    try:
-        df_ym = pd.read_sql_query("SELECT `Арт_MC`, `Нал` FROM yandex WHERE `Арт_MC` IS NOT NULL AND `Нал` IS NOT NULL", conn)
-        logger.success(f"✅ Yandex: загружено {len(df_ym)} строк")
+        logger.success(f"📦 Загружено {len(df)} строк из marketplace")
+
         current_time = datetime.now(timezone.utc).isoformat()
-        ym_final = [{
-            "sku": str(row['Арт_MC']).strip(),
-            "items": [{"count": int(row['Нал']), "updatedAt": current_time}]
-        } for _, row in df_ym.iterrows()]
-    except Exception as e:
-        logger.error(f"❌ Ошибка при чтении YM: {e}")
-
-    try:
-        df_oz = pd.read_sql_query("SELECT `Арт_MC`, `Нал` FROM ozon WHERE `Арт_MC` IS NOT NULL AND `Нал` IS NOT NULL", conn)
-        logger.success(f"✅ Ozon: загружено {len(df_oz)} строк")
         warehouse_id = 1020002115578000
-        oz_final = [{
-            "offer_id": str(row['Арт_MC']).strip(),
-            "product_id": int(row['Арт_MC']),
-            "stock": int(row['Нал']),
-            "warehouse_id": warehouse_id
-        } for _, row in df_oz.iterrows()]
-    except Exception as e:
-        logger.error(f"❌ Ошибка при чтении OZ: {e}")
 
-    conn.close()
+        for _, row in df.iterrows():
+            mp = (row["Маркетплейс"] or "").lower()
+            nal = int(row["Нал"]) if row["Нал"] is not None else 0
+
+            if mp == "wildberries" and row.get("WB Barcode"):
+                wb_final.append({
+                    "sku": str(row["WB Barcode"]).strip(),
+                    "amount": nal
+                })
+            elif mp == "yandex":
+                ym_final.append({
+                    "sku": str(row["Арт_MC"]).strip(),
+                    "items": [{"count": nal, "updatedAt": current_time}]
+                })
+            elif mp == "ozon":
+                try:
+                    product_id = int(row["Арт_MC"])  # если не int — упадёт
+                except:
+                    logger.warning(f"⛔ Некорректный product_id для OZON: {row['Арт_MC']}")
+                    continue
+
+                oz_final.append({
+                    "offer_id": str(row["Арт_MC"]).strip(),
+                    "product_id": product_id,
+                    "stock": nal,
+                    "warehouse_id": warehouse_id
+                })
+
+        logger.success(f"✅ Wildberries: {len(wb_final)}, Yandex: {len(ym_final)}, Ozon: {len(oz_final)}")
+
+    except Exception as e:
+        logger.error(f"❌ Ошибка при чтении остатков: {e}")
+    finally:
+        conn.close()
+
     return wb_final, ym_final, oz_final
 
 # 🚚 Wildberries
