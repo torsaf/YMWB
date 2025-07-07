@@ -107,7 +107,7 @@ def update_stock(articul, platform, quantity=1):
                 f"Товар: \"{model}\"\n"
                 f"Артикул: *{articul}*\n"
                 f"Опт: {opt_price}, РРЦ: {rrc_price}\n"
-                f"Было: {prev_q}, стало: {new_q}.\n"
+                f"Было: {prev_q} ➡️ стало: {new_q}\n"
                 f"Склад: {supplier}"
             )
             telegram.notify(token=telegram_got_token, chat_id=telegram_chat_id, message=message, parse_mode='markdown')
@@ -160,7 +160,7 @@ def update_stock(articul, platform, quantity=1):
             f"Товар: \"{model}\"\n"
             f"Артикул: *{articul}*\n"
             f"Опт: {opt_price}, РРЦ: {rrc_price}\n"
-            f"Было: {stock}, стало: {new_stock}.\n"
+            f"Было: {stock} ➡️ стало: {new_stock}\n"
             f"Склад: {supplier}"
         )
         telegram.notify(token=telegram_got_token, chat_id=telegram_chat_id, message=message, parse_mode='markdown')
@@ -277,16 +277,16 @@ file_path = 'System/order_ids.txt'
 
 
 # Функция, которая берет название товара из файла, когда есть заказ с WB
-def get_product(nmId):
-    """Получает название модели из таблицы marketplace по WB Артикулу."""
+def get_product(art_mc):
+    """Получает название модели из таблицы marketplace по Арт_MC (например, артикул Wildberries)."""
     db_path = 'System/marketplace_base.db'
     try:
         conn = sqlite3.connect(db_path, timeout=10)
         cursor = conn.cursor()
         cursor.execute("""
             SELECT Модель FROM marketplace 
-            WHERE [WB Артикул] = ? AND Маркетплейс = 'Wildberries'
-        """, (str(nmId),))
+            WHERE [Арт_MC] = ? AND lower(Маркетплейс) = 'wildberries'
+        """, (str(art_mc),))
         result = cursor.fetchone()
         return result[0] if result else None
     except Exception as e:
@@ -338,7 +338,7 @@ def notify_about_new_orders(orders, platform, supplier):
 
         elif supplier == 'Wildberries':
             article = order.get('article')
-            model = get_product(order.get('nmId'))
+            model = get_product(article)
             price = str(order.get('convertedPrice'))[:-2]
             qty = int(order.get('quantity', 1))
 
