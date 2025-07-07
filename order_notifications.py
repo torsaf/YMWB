@@ -47,7 +47,7 @@ telegram_chat_id = os.getenv('telegram_chat_id')
 telegram = get_notifier('telegram')
 
 
-def update_stock(articul, platform):
+def update_stock(articul, platform, quantity=1):
     logger.info(f"🔁 Вычитание со склада: {articul} | Платформа: {platform}")
     platform = platform.lower()
     db_path = "System/marketplace_base.db"
@@ -96,7 +96,7 @@ def update_stock(articul, platform):
 
             row_index = matched_rows.index[0]
             prev_q = sklad.at[row_index, 'Наличие']
-            sklad.at[row_index, 'Наличие'] = max(0, prev_q - 1)
+            sklad.at[row_index, 'Наличие'] = max(0, prev_q - quantity)
             new_q = sklad.at[row_index, 'Наличие']
 
             updated_data = sklad.iloc[:, :8].replace([float('inf'), float('-inf')], 0).fillna(0).values.tolist()
@@ -125,7 +125,7 @@ def update_stock(articul, platform):
             telegram.notify(token=telegram_got_token, chat_id=telegram_chat_id, message=error_message, parse_mode='markdown')
 
     else:
-        new_stock = max(0, stock - 1)
+        new_stock = max(0, stock - quantity)
         cur = conn.cursor()
         cur.execute(
             "UPDATE marketplace SET Нал = ?, \"Дата изменения\" = ? WHERE Арт_MC = ? AND Маркетплейс = ?",
@@ -144,7 +144,7 @@ def update_stock(articul, platform):
                 for _, alt_row in alt_df.iterrows():
                     rowid = alt_row["rowid"]
                     current_qty = int(alt_row.get("Наличие", 0))
-                    updated_qty = max(0, current_qty - 1)
+                    updated_qty = max(0, current_qty - quantity)
                     alt_cur.execute("UPDATE prices SET Наличие = ? WHERE rowid = ?", (updated_qty, rowid))
                     logger.debug(f"🔧 YMWB: {artikul_alt} | {current_qty} → {updated_qty}")
                 alt_conn.commit()
@@ -328,21 +328,25 @@ def notify_about_new_orders(orders, platform, supplier):
                 )
                 price = int(item.get('buyerPrice', 0))
                 total_price = int(subsidy_amount + price)
+                qty = int(item.get('count', 1))
 
                 message += f"\nАртикул: {offer_id}\n"
                 message += f"Товар: {offer_name}\n"
+                message += f"Количество: {qty} шт.\n"
                 message += f"Цена: {total_price} р.\n"
-                items_to_update.append(offer_id)
+                items_to_update.append((offer_id, qty))
 
         elif supplier == 'Wildberries':
             article = order.get('article')
             model = get_product(order.get('nmId'))
             price = str(order.get('convertedPrice'))[:-2]
+            qty = int(order.get('quantity', 1))
 
             message += f"Артикул: {article}\n"
             message += f"Товар: {model}\n"
+            message += f"Количество: {qty} шт.\n"
             message += f"Цена: {price} р.\n"
-            items_to_update.append(article)
+            items_to_update.append((article, qty))
 
         elif supplier == 'Ozon':
             shipment_date_raw = order.get('shipment_date')
@@ -358,19 +362,21 @@ def notify_about_new_orders(orders, platform, supplier):
                 offer_id = product.get('offer_id')
                 product_name = product.get('name', 'Не указано')
                 price = int(float(product.get('price', 0)))
+                qty = int(product.get('quantity', 1))
 
                 message += f"\nАртикул: {offer_id}\n"
                 message += f"Товар: {product_name}\n"
+                message += f"Количество: {qty} шт.\n"
                 message += f"Цена: {price} р.\n"
-                items_to_update.append(offer_id)
+                items_to_update.append((offer_id, qty))
 
         # 1. Отправляем сообщение о заказе
         telegram.notify(token=telegram_got_token, chat_id=telegram_chat_id, message=message, parse_mode='markdown')
 
         # 2. Вычитаем со склада
-        for offer_id in items_to_update:
-            logger.debug(f"🔧 Вызываем update_stock для {offer_id} | Платформа: {platform}")
-            update_stock(offer_id, platform)
+        for offer_id, qty in items_to_update:
+            logger.debug(f"🔧 Вызываем update_stock для {offer_id} | Платформа: {platform}, Кол-во: {qty}")
+            update_stock(offer_id, platform, qty)
 
         # 3. Сообщаем об успешном вычитании
         telegram.notify(token=telegram_got_token, chat_id=telegram_chat_id, message="📦")
