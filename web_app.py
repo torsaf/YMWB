@@ -42,24 +42,20 @@ def send_telegram_message(message: str):
 
 
 def disable_invask_if_needed():
-    supplier = "Invask"
-    if global_stock_flags["suppliers"].get(supplier, True):  # если включён — отключить
-        global_stock_flags["suppliers"][supplier] = False
-        with open(FLAGS_PATH, 'w') as f:
-            json.dump(global_stock_flags, f)
-        logger.info(f"🕐 Автоотключение поставщика {supplier}")
-    else:
-        logger.debug(f"ℹ️ {supplier} уже отключён — пропускаем")
+    try:
+        logger.info("⏱️ CRON: Автоотключение поставщика Invask (вызов toggle_supplier)")
+        requests.post("http://127.0.0.1:5050/toggle_supplier/Invask")
+    except Exception as e:
+        logger.warning(f"❌ CRON: Ошибка при отключении Invask: {e}")
+
 
 def enable_invask_if_needed():
-    supplier = "Invask"
-    if not global_stock_flags["suppliers"].get(supplier, True):  # если выключен — включить
-        global_stock_flags["suppliers"][supplier] = True
-        with open(FLAGS_PATH, 'w') as f:
-            json.dump(global_stock_flags, f)
-        logger.info(f"🕘 Автовключение поставщика {supplier}")
-    else:
-        logger.debug(f"ℹ️ {supplier} уже включён — пропускаем")
+    try:
+        logger.info("⏱️ CRON: Автовключение поставщика Invask (вызов toggle_supplier)")
+        requests.post("http://127.0.0.1:5050/toggle_supplier/Invask")
+    except Exception as e:
+        logger.warning(f"❌ CRON: Ошибка при включении Invask: {e}")
+
 
 def backup_database():
     os.makedirs("System/backups", exist_ok=True)
