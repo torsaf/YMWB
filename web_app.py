@@ -21,6 +21,8 @@ from flask import send_file
 from copy import deepcopy
 from io import BytesIO
 from unlisted import generate_unlisted
+from ozon_actions import remove_all_products_from_all_actions
+
 
 last_download_time = None
 LAST_UPDATE_FILE = "System/last_update.txt"
@@ -891,9 +893,10 @@ if __name__ == '__main__':
     if not os.environ.get("WERKZEUG_RUN_MAIN"):  # предотвращает двойной запуск задач
         scheduler = BackgroundScheduler()
         scheduler.add_job(update_sklad_task, 'interval', minutes=5)
+        scheduler.add_job(remove_all_products_from_all_actions, 'interval', minutes=1)  # Проверка Акций Озон
         scheduler.add_job(backup_database, 'cron', hour=2)  # каждый день в 2 ночи
-        scheduler.add_job(disable_invask_if_needed, 'cron', day_of_week='fri', hour=1, minute=0) # Пятница 01:00
-        scheduler.add_job(enable_invask_if_needed, 'cron', day_of_week='sun', hour=23, minute=0) # Воскресенье 23:00
+        scheduler.add_job(disable_invask_if_needed, 'cron', day_of_week='fri', hour=1, minute=0)
+        scheduler.add_job(enable_invask_if_needed, 'cron', day_of_week='sun', hour=23, minute=0)
         scheduler.start()
         logger.info("📅 Планировщик запущен (обновление склада каждые 5 минут)")
     logger.info("🚀 Приложение запущено")
