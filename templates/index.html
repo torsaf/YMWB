@@ -477,6 +477,71 @@
             color: white;
             border-color: #007bff;
         }
+        /* Единый столбец: алфавит сверху, поиск ниже, одна ширина */
+          .letters-and-search {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 8px;
+          }
+          .letters-and-search .letters {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+          }
+          .letters-and-search .letters .row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+          }
+          .letters-and-search .search-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            width: 100%;
+          }
+          .letters-and-search .search-row .search-wrap {
+            position: relative;
+            flex: 1 1 auto;   /* инпут растягивается по ширине алфавита */
+          }
+          .letters-and-search input[type="search"] {
+            width: 100%;
+            height: 32px;
+            font-size: 15px;
+            padding: 6px 32px 6px 12px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            box-sizing: border-box;
+          }
+          .letters-and-search .search-row button[type="submit"]{
+            height: 32px;
+            padding: 0 12px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            background:#f0f0f0;
+            display:flex; align-items:center; gap:6px;
+            font-size:15px; cursor:pointer;
+          }
+          /* Нижняя полоса: log слева, +/- справа, по одной линии */
+          .letters-and-search .controls-under {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+            gap: 12px;
+          }
+          .letters-and-search .controls-under .left,
+          .letters-and-search .controls-under .right {
+            display: flex; align-items: center; gap: 10px;
+          }
+          .btn-markup {
+            height: 28px;
+            padding: 0 10px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            background:#f8f8f8;
+            cursor: pointer;
+          }
         html, body {
             width: 100%;
             height: 100vh;
@@ -569,6 +634,114 @@
             margin-left: 2px;
             line-height: 1;
           }
+        /* ——— Единые размеры и выравнивание под высоту алфавита ——— */
+        :root{
+          --ctl-h: 28px;          /* высота, как у букв */
+          --ctl-radius: 6px;      /* скругление */
+          --ctl-font: 14px;       /* шрифт */
+          --ctl-pad-x: 10px;      /* горизонтальные отступы */
+        }
+
+        /* Алфавитные кнопки */
+        .letter-filter a{
+          height: var(--ctl-h);
+          padding: 0 var(--ctl-pad-x);
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: var(--ctl-radius);
+          font-size: var(--ctl-font);
+        }
+
+        /* Поле поиска */
+        #custom-search{
+          height: var(--ctl-h);
+          padding: 0 28px 0 var(--ctl-pad-x); /* место под крестик справа */
+          font-size: var(--ctl-font);
+          border-radius: var(--ctl-radius);
+        }
+
+        /* Кнопка "Найти" */
+        form[action^="/table/"] button[type="submit"]{
+          height: var(--ctl-h) !important;
+          padding: 0 var(--ctl-pad-x) !important;
+          border-radius: var(--ctl-radius) !important;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          font-size: var(--ctl-font);
+        }
+
+        /* Кнопки наценки */
+        #btn-markdown-dec,
+        #btn-markdown-inc{
+          height: var(--ctl-h);
+          padding: 0 8px;
+          border-radius: var(--ctl-radius);
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          font-size: var(--ctl-font);
+        }
+        /* === Единая высота и стиль для всех элементов управления === */
+        :root {
+          --ctl-h: 32px;       /* единая высота */
+          --ctl-radius: 6px;   /* скругление */
+          --ctl-font: 14px;    /* размер шрифта */
+          --ctl-pad-x: 10px;   /* горизонтальные отступы */
+        }
+
+        /* Алфавитные кнопки */
+        .letter-filter a {
+          height: var(--ctl-h) !important;
+          padding: 0 var(--ctl-pad-x) !important;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: var(--ctl-radius);
+          font-size: var(--ctl-font);
+        }
+
+        /* Поле поиска */
+        #custom-search {
+          height: var(--ctl-h) !important;
+          padding: 0 28px 0 var(--ctl-pad-x) !important;
+          font-size: var(--ctl-font);
+          border-radius: var(--ctl-radius);
+          box-sizing: border-box;
+        }
+
+        /* Кнопка "Найти" */
+        form[action^="/table/"] button[type="submit"] {
+          height: var(--ctl-h) !important;
+          padding: 0 var(--ctl-pad-x) !important;
+          border-radius: var(--ctl-radius) !important;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          font-size: var(--ctl-font);
+        }
+
+        /* Кнопки ±1% */
+        #btn-markdown-dec,
+        #btn-markdown-inc {
+          height: var(--ctl-h) !important;
+          padding: 0 var(--ctl-pad-x) !important;
+          border-radius: var(--ctl-radius);
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          font-size: var(--ctl-font);
+        }
+
+        /* Все кнопки и поля в одной линии */
+        form, .letter-filter, #btn-markdown-dec, #btn-markdown-inc {
+          vertical-align: middle;
+        }
+        :root{
+          --stack-gap: 8px; /* единый вертикальный зазор между рядами */
+        }
+
     </style>
 </head>
 <body>
@@ -659,7 +832,7 @@
                   <img src="{{ url_for('static', filename='icons/stats.svg') }}" alt="Статистика" width="16" height="16">
                   Статистика
                   {% if has_errors %}
-                    <span class="error-indicator">❗</span>
+                    <span class="error-indicator">🟠</span>
                   {% endif %}
                 </a>
 
@@ -676,7 +849,7 @@
             </div>
 
           <!-- Алфавит -->
-          <div class="letter-filter" style="display: flex; flex-direction: column; gap: 6px; margin-top: 2px;">
+            <div class="letter-filter" style="display:flex; flex-direction:column; gap: var(--stack-gap);">
             <div style="display: flex; flex-wrap: wrap; gap: 6px;">
               {% set row1 = ['0-9', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M'] %}
               {% for letter in row1 %}
@@ -698,7 +871,7 @@
           </div>
 
           <!-- Поисковая форма -->
-          <div style="display: flex; flex-direction: column; gap: 4px; margin-left: 10px;">
+          <div style="display:flex; flex-direction:column; gap: var(--stack-gap); margin-left: 10px;">
               <form method="GET" action="/table/{{ selected_table }}"
                     style="display: flex; align-items: center; gap: 10px;">
                 <div style="position: relative;">
@@ -720,9 +893,63 @@
                   Найти
                 </button>
               </form>
-              <div style="font-size: 13px; color: #777;">
-                <a href="/download_log" style="text-decoration: none; color: #777;" download>log</a>
-              </div>
+              <div style="font-size: 13px; color: #777; display: flex; align-items: center; gap: 10px;">
+                  <a href="/download_log"
+                       style="text-decoration: none; color: #777;
+                              display: inline-flex; align-items: center; justify-content: center;
+                              height: var(--ctl-h); padding: 0 var(--ctl-pad-x);
+                              border: 1px solid #ccc; border-radius: var(--ctl-radius);
+                              font-size: var(--ctl-font); background: #f8f8f8; cursor: pointer;"
+                       download>log</a>
+
+                  <!-- Групповая корректировка наценки -->
+                  <div style="display:flex; align-items:center; gap:6px; margin-left: 73px;">
+                    <span style="font-size:14px; color:#555;">Наценка:</span>
+                    <button type="button" id="btn-markdown-dec"
+                            style="padding:2px 8px; border:1px solid #ccc; border-radius:6px; background:#f8f8f8; cursor:pointer;">
+                      −1%
+                    </button>
+                    <button type="button" id="btn-markdown-inc"
+                            style="padding:2px 8px; border:1px solid #ccc; border-radius:6px; background:#f8f8f8; cursor:pointer;">
+                      +1%
+                    </button>
+                  </div>
+                </div>
+
+                <script>
+                (function(){
+                  const selected = "{{ selected_table }}";
+                  function adjust(delta){
+                    document.getElementById('btn-markdown-dec')?.setAttribute('disabled', 'disabled');
+                    document.getElementById('btn-markdown-inc')?.setAttribute('disabled', 'disabled');
+
+                    fetch(`/bulk_markup/${selected}`, {
+                      method: 'POST',
+                      headers: {'Content-Type':'application/x-www-form-urlencoded'},
+                      body: `delta=${delta}`
+                    }).then(r => {
+                      if (r.ok){
+                        Swal.fire({
+                          toast:true, position:'top-end', icon:'success',
+                          title: (delta>0?'+1%':'-1%')+' применено',
+                          showConfirmButton:false, timer:1500
+                        });
+                        location.reload();
+                      } else {
+                        Swal.fire('Ошибка', 'Не удалось изменить наценку', 'error');
+                      }
+                    }).catch(() => {
+                      Swal.fire('Ошибка', 'Сетевая ошибка', 'error');
+                    }).finally(()=>{
+                      document.getElementById('btn-markdown-dec')?.removeAttribute('disabled');
+                      document.getElementById('btn-markdown-inc')?.removeAttribute('disabled');
+                    });
+                  }
+                  document.getElementById('btn-markdown-dec')?.addEventListener('click', ()=>adjust(-1));
+                  document.getElementById('btn-markdown-inc')?.addEventListener('click', ()=>adjust(1));
+                })();
+                </script>
+
             </div>
 
 

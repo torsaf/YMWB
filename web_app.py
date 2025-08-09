@@ -657,6 +657,56 @@ def update_row(table, item_id):
     return '', 204
 
 
+@app.route('/bulk_markup/<market>', methods=['POST'])
+def bulk_markup(market):
+    """
+    Массовая корректировка наценки для выбранного маркетплейса.
+    delta = +1 или -1 (в теле запроса x-www-form-urlencoded: delta=1|-1)
+    Пересчитывает 'Цена' по формуле округления к сотне.
+    """
+    try:
+        delta = int(request.form.get('delta', '0'))
+    except Exception:
+        return Response("Bad delta", status=400)
+
+    if market not in ('yandex', 'ozon', 'wildberries'):
+        return Response("Bad market", status=400)
+
+    # Если маркетплейс глобально выключен — меняем только наценку и цену, остатки не трогаем
+    from datetime import datetime
+    now_str = datetime.now().strftime("%d.%m.%Y %H:%M")
+
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+
+    # Наценка хранится без знака %, Опт и Цена — числа/строки-числа.
+    # Обновляем наценку и сразу цену с округлением к сотне.
+    try:
+        cur.execute("""
+            UPDATE marketplace
+               SET Наценка = COALESCE(CAST(Наценка AS INTEGER), 0) + ?,
+                   Цена    = CAST(
+                                ROUND(
+                                    (CAST(Опт AS FLOAT) + CAST(Опт AS FLOAT) * (COALESCE(CAST(Наценка AS INTEGER),0) + ?)/100.0)
+                                    / 100.0, 0
+                                ) * 100 AS INTEGER
+                             ),
+                   "Дата изменения" = ?
+             WHERE Маркетплейс = ?
+        """, (delta, delta, now_str, market))
+        conn.commit()
+        updated = cur.rowcount
+    except Exception as e:
+        conn.rollback()
+        logger.exception("❌ Ошибка массового изменения наценки")
+        return Response("Server error", status=500)
+    finally:
+        conn.close()
+
+    logger.success(f"📈 Массовое изменение наценки {market}: delta={delta}, затронуто строк: {updated}")
+    return '', 204
+
+
 @app.route('/download_log')
 def download_log():
     today_str = datetime.now().strftime("%Y-%m-%d")
