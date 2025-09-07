@@ -1,4 +1,3 @@
-
 <!doctype html>
 <html>
 <head>
@@ -548,29 +547,28 @@
         }
         /* ДОБАВЬ в конец того же <style>, где уже лежит мобильный медиазапрос */
         /* --- Мобильный фикс (≤ 767 px) ----------------------------------- */
-<!--        @media (max-width: 767px){-->
-<!--            html, body{-->
-<!--                 height: auto;     /* страница может расти вниз */-->
-<!--                 min-height: 100vh;/* но не меньше высоты видимого экрана */-->
-<!--             }-->
+        /* Закомментированный медиазапрос для мобильных устройств */
+        /*
+        @media (max-width: 767px){
+            html, body{
+                 height: auto;
+                 min-height: 100vh;
+             }
 
-<!--          /* 1. Обнуляем центрирование только для таблицы  */-->
-<!--          .table-container{-->
-<!--              justify-content: flex-start;   /* вместо center */-->
-<!--              overflow-x: auto;              /* собственная полоса прокрутки */-->
-<!--              /* 2. «Вытягиваем» контейнер на всю ширину,-->
-<!--                    не трогая padding у .wrapper */-->
-<!--              margin-left: -20px;            /* съедаем левый внутренний отступ wrapper */-->
-<!--              margin-right: -20px;           /* …и правый */-->
-<!--              padding-left: 20px;            /* возвращаем «буфер», чтобы текст не лип к краю */-->
-<!--              padding-right: 20px;-->
-<!--          }-->
+          .table-container{
+              justify-content: flex-start;
+              overflow-x: auto;
+              margin-left: -20px;
+              margin-right: -20px;
+              padding-left: 20px;
+              padding-right: 20px;
+          }
 
-<!--          /* 3. Таблица без margin:auto, чтобы не убегала вправо */-->
-<!--          .table-container > table{-->
-<!--              margin: 0;-->
-<!--          }-->
-<!--        }-->
+          .table-container > table{
+              margin: 0;
+          }
+        }
+        */
         thead {
             position: relative;
         }
@@ -742,220 +740,250 @@
           --stack-gap: 8px; /* единый вертикальный зазор между рядами */
         }
 
+        /* Стили для нового компактного блока поиска */
+        .letter-filter a.active {
+            background-color: #007bff !important;
+            color: white !important;
+            border-color: #007bff !important;
+        }
+        
+        .letter-filter a:hover {
+            background-color: #f0f0f0 !important;
+        }
+
     </style>
 </head>
 <body>
 <div class="wrapper">
-    <div class="top-panel" style="display: flex; justify-content: center; align-items: flex-start; gap: 45px; flex-wrap: wrap; margin-bottom: 0px;">
-      <!-- Блоки "Sklad обновлен" и статистика -->
-      <div style="display: flex; gap: 30px; align-items: flex-start;">
-        {% if last_download_time %}
-        <div style="font-size: 15px; color: #555; display: flex; flex-direction: column; gap: 6px; min-width: 200px;">
-          <div style="font-weight: normal;">Sklad обновлен:</div>
-          <div>{{ last_download_time }}</div>
-          <div style="font-size: 15px; color: #007bff; cursor: pointer;" id="manual-update-btn">
-            Обновить
-          </div>
-        </div>
-        {% endif %}
+    <div class="top-panel" style="display: flex; justify-content: flex-start; align-items: flex-start; width: 100%; flex-wrap: wrap; gap: 12px; margin-bottom: 0px;">
+      <div style="display: flex; align-items: flex-start; gap: 12px;">
+          <!-- Левая часть: информация о складе и блок поиска -->
+          <div style="display: flex; flex-direction: column; gap: 12px; align-items: flex-start;">
+            <!-- Первый блок: Sklad обновлен и статистика -->
+            <div id="first-block-row" style="display: flex; gap: 30px; align-items: flex-start;">
+                {% if last_download_time %}
+                <div style="font-size: 15px; color: #555; display: flex; flex-direction: column; gap: 6px; min-width: 200px;">
+                  <div style="font-weight: normal;">Sklad обновлен:</div>
+                  <div>{{ last_download_time }}</div>
+                  <div style="font-size: 15px; color: #007bff; cursor: pointer;" id="manual-update-btn">
+                    Обновить
+                  </div>
+                </div>
+                {% endif %}
+        
+                {% if stats %}
+                <div style="font-size: 15px; color: #555; display: flex; flex-direction: column; gap: 6px; min-width: 160px; transform: translateX(60px);">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <span>Всего товаров:</span>
+                    <span>{{ stats['Всего товаров'] }}</span>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <span>В наличии:</span>
+                    <span>{{ stats['В наличии'] }}</span>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <span>Отключено:</span>
+                    <span>{{ stats['Отключено'] }}</span>
+                  </div>
+                </div>
+                {% endif %}
 
-        {% if stats %}
-        <div style="font-size: 15px; color: #555; display: flex; flex-direction: column; gap: 6px; min-width: 160px;">
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <span>Всего товаров:</span>
-            <span>{{ stats['Всего товаров'] }}</span>
+                <!-- Группа навигации и глобальных переключателей (рядом с первым блоком) -->
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <div class="nav" style="transform: translateX(150px);">
+                      <a href="/table/yandex?search={{ request.args.get('search', '') }}&letter={{ request.args.get('letter', '') }}"
+                         class="{% if selected_table == 'yandex' %}active yandex{% endif %}">Yandex</a>
+                      <a href="/table/ozon?search={{ request.args.get('search', '') }}&letter={{ request.args.get('letter', '') }}"
+                         class="{% if selected_table == 'ozon' %}active ozon{% endif %}">Ozon</a>
+                      <a href="/table/wildberries?search={{ request.args.get('search', '') }}&letter={{ request.args.get('letter', '') }}"
+                         class="{% if selected_table == 'wildberries' %}active wildberries{% endif %}">Wildberries</a>
+                  </div>
+                  <div style="font-size: 15px; color: #555; display: flex; flex-direction: column; gap: 6px; min-width: 120px; margin-left: 250px;">
+                      {% for mp in ['yandex', 'ozon', 'wildberries'] %}
+                      <label style="display: flex; align-items: center; justify-content: space-between;">
+                        <span style="min-width: 90px;">{{ mp.capitalize() }}</span>
+                        <label class="toggle-switch">
+                          <input type="checkbox" data-market="{{ mp }}" class="global-toggle" {% if global_stock_flags[mp] %}checked{% endif %}>
+                          <span class="toggle-slider"></span>
+                        </label>
+                      </label>
+                      {% endfor %}
+                  </div>
+                </div>
+            </div>
+            <!-- / Первый блок -->
+    
+            <!-- Второй блок: компоновка по макету (левая колонка — кнопки; центр — алфавит; справа — поиск, log, наценка) -->
+            <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 12px; margin-top: 5px; margin-bottom: 12px; width: 100%;">
+              <!-- Кнопки "Статистика" и "Новые товары" друг над другом -->
+                <div style="display: flex; flex-direction: column; gap: 10px; margin-right: 15px;">
+                  <a href="/statistic"
+                       style="display: flex; align-items: center; gap: 6px;
+                              padding: 6px 12px; font-size: 15px;
+                              border-radius: 6px; border: 1px solid #ccc;
+                              background-color: #f0f0f0;
+                              color: #333; text-decoration: none;
+                              transition: all 0.2s;">
+                      <img src="{{ url_for('static', filename='icons/stats.svg') }}" alt="Статистика" width="16" height="16">
+                      Статистика
+                      {% if has_errors %}
+                        <span class="error-indicator">🟠</span>
+                      {% endif %}
+                    </a>
+
+                  <a href="/download_unlisted"
+                     style="display: flex; align-items: center; gap: 6px;
+                            padding: 6px 12px; font-size: 15px;
+                            border-radius: 6px; border: 1px solid #ccc;
+                            background-color: #f0f0f0;
+                            color: #333; text-decoration: none;
+                            transition: all 0.2s;">
+                    <img src="{{ url_for('static', filename='icons/file-upload.svg') }}" alt="Загрузка" width="16" height="16">
+                    Новые товары
+                  </a>
+                </div>
+
+              <!-- Алфавит -->
+                <div class="letter-filter" style="display:flex; flex-direction:column; gap: var(--stack-gap);">
+                <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                  {% set row1 = ['0-9', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M'] %}
+                  {% for letter in row1 %}
+                    <a href="{{ url_for('show_table', table_name=selected_table, letter=letter, search=request.args.get('search', '')) }}"
+                       class="{% if request.args.get('letter') == letter %}active{% endif %}">
+                      {{ letter }}
+                    </a>
+                  {% endfor %}
+                </div>
+                <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                  {% set row2 = ['N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'А-Я'] %}
+                  {% for letter in row2 %}
+                    <a href="{{ url_for('show_table', table_name=selected_table, letter=letter, search=request.args.get('search', '')) }}"
+                       class="{% if request.args.get('letter') == letter %}active{% endif %}">
+                      {{ letter }}
+                    </a>
+                  {% endfor %}
+                </div>
+              </div>
+
+              <!-- Поисковая форма -->
+              <div style="display:flex; flex-direction:column; gap: var(--stack-gap); margin-left: 10px;">
+                  <form method="GET" action="/table/{{ selected_table }}"
+                        style="display: flex; align-items: center; gap: 10px;">
+                    <div style="position: relative;">
+                      <input type="search" id="custom-search" name="search"
+                             placeholder="Поиск: Арт_MC, Поставщик, Модель"
+                             value="{{ request.args.get('search', '') }}"
+                             style="font-size: 15px; padding: 6px 32px 6px 12px; border-radius: 6px;
+                                    width: 300px; box-sizing: border-box; border: 1px solid #ccc;"
+                             onsearch="this.value=''; this.form.submit();">
+                      <span id="clear-search"
+                            style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+                                   cursor: pointer; font-size: 16px; color: #aaa; display: none;">&times;</span>
+                    </div>
+                    <button type="submit"
+                            style="display: flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 15px;
+                                   border-radius: 6px; border: 1px solid #ccc; background-color: #f0f0f0;
+                                   cursor: pointer; transition: all 0.2s;">
+                      <img src="{{ url_for('static', filename='icons/search.svg') }}" alt="🔍" width="16" height="16">
+                      Найти
+                    </button>
+                  </form>
+                  <div style="font-size: 13px; color: #777; display: flex; align-items: center; gap: 10px;">
+                      <a href="/download_log"
+                           style="text-decoration: none; color: #777;
+                                  display: inline-flex; align-items: center; justify-content: center;
+                                  height: var(--ctl-h); padding: 0 var(--ctl-pad-x);
+                                  border: 1px solid #ccc; border-radius: var(--ctl-radius);
+                                  font-size: var(--ctl-font); background: #f8f8f8; cursor: pointer;"
+                           download>log</a>
+
+                      <!-- Групповая корректировка наценки -->
+                      <div style="display:flex; align-items:center; gap:6px; margin-left: 73px;">
+                        <span style="font-size:14px; color:#555;">Наценка:</span>
+                        <button type="button" id="btn-markdown-dec"
+                                style="padding:2px 8px; border:1px solid #ccc; border-radius:6px; background:#f8f8f8; cursor:pointer;">
+                          −1%
+                        </button>
+                        <button type="button" id="btn-markdown-inc"
+                                style="padding:2px 8px; border:1px solid #ccc; border-radius:6px; background:#f8f8f8; cursor:pointer;">
+                          +1%
+                        </button>
+                      </div>
+                    </div>
+
+                    <script>
+                    (function(){
+                      const selected = "{{ selected_table }}";
+                      function adjust(delta){
+                        document.getElementById('btn-markdown-dec')?.setAttribute('disabled', 'disabled');
+                        document.getElementById('btn-markdown-inc')?.setAttribute('disabled', 'disabled');
+
+                        fetch(`/bulk_markup/${selected}`, {
+                          method: 'POST',
+                          headers: {'Content-Type':'application/x-www-form-urlencoded'},
+                          body: `delta=${delta}`
+                        }).then(r => {
+                          if (r.ok){
+                            Swal.fire({
+                              toast:true, position:'top-end', icon:'success',
+                              title: (delta>0?'+1%':'-1%')+' применено',
+                              showConfirmButton:false, timer:1500
+                            });
+                            location.reload();
+                          } else {
+                            Swal.fire('Ошибка', 'Не удалось изменить наценку', 'error');
+                          }
+                        }).catch(() => {
+                          Swal.fire('Ошибка', 'Сетевая ошибка', 'error');
+                        }).finally(()=>{
+                          document.getElementById('btn-markdown-dec')?.removeAttribute('disabled');
+                          document.getElementById('btn-markdown-inc')?.removeAttribute('disabled');
+                        });
+                      }
+                      document.getElementById('btn-markdown-dec')?.addEventListener('click', ()=>adjust(-1));
+                      document.getElementById('btn-markdown-inc')?.addEventListener('click', ()=>adjust(1));
+                    })();
+                    </script>
+
+                </div>
+            </div>
+            <!-- / Второй блок -->
           </div>
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <span>В наличии:</span>
-            <span>{{ stats['В наличии'] }}</span>
-          </div>
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <span>Отключено:</span>
-            <span>{{ stats['Отключено'] }}</span>
-          </div>
-        </div>
-        {% endif %}
+          
+          <!-- Правая часть: кнопки МП, переключатели и поставщики -->
+          <!-- Удалена: кнопки и переключатели перенесены рядом с левым блоком -->
+          <div style="display:none"></div>
       </div>
-      <!-- Правый блок с выключателями -->
-      <div class="nav" style="display: flex; gap: 0px; align-items: center; margin-top: 0;">
-
-        <a href="/table/yandex?search={{ request.args.get('search', '') }}&letter={{ request.args.get('letter', '') }}"
-           class="{% if selected_table == 'yandex' %}active yandex{% endif %}">Yandex</a>
-        <a href="/table/ozon?search={{ request.args.get('search', '') }}&letter={{ request.args.get('letter', '') }}"
-           class="{% if selected_table == 'ozon' %}active ozon{% endif %}">Ozon</a>
-        <a href="/table/wildberries?search={{ request.args.get('search', '') }}&letter={{ request.args.get('letter', '') }}"
-           class="{% if selected_table == 'wildberries' %}active wildberries{% endif %}">Wildberries</a>
-
-      </div>
-
-      <!-- Переключатели -->
-      <div style="font-size: 15px; color: #555; display: flex; flex-direction: column; gap: 6px; min-width: 120px;">
-        {% for mp in ['yandex', 'ozon', 'wildberries'] %}
-        <label style="display: flex; align-items: center; justify-content: space-between;">
-          <span style="min-width: 90px;">{{ mp.capitalize() }}</span>
-          <label class="toggle-switch">
-            <input type="checkbox" data-market="{{ mp }}" class="global-toggle" {% if global_stock_flags[mp] %}checked{% endif %}>
-            <span class="toggle-slider"></span>
-          </label>
-        </label>
-        {% endfor %}
-      </div>
-
-
-        <!-- Вертикальные тумблеры поставщиков -->
-        <div style="font-size: 15px; color: #555; display: flex; flex-direction: column; gap: 6px; min-width: 120px;">
-          {% for supplier in suppliers_list %}
-            <label style="display: flex; align-items: center; justify-content: space-between;">
-              <span style="min-width: 90px;">{{ supplier }}</span>
+      <!-- Третий блок: поставщики (прижат вправо) -->
+      <div style="font-size: 15px; color: #555; display: flex; flex-direction: column; gap: 6px; min-width: 120px; margin-left: auto; transform: translateX(-10px);">
+        {% for supplier in suppliers_list %}
+            {% set c = supplier_counts.get(supplier, {}) %}
+            {% set ym = c.get('yandex', {}) %}
+            {% set oz = c.get('ozon', {}) %}
+            {% set wb = c.get('wildberries', {}) %}
+  
+            <label style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+              <span style="display:flex; flex-direction:column; min-width: 220px;">
+                <span>{{ supplier }}</span>
+                <span class="text-muted" style="font-size:12px; line-height:1.2;">
+                  YM: {{ ym.get('total', 0) }} (акт: {{ ym.get('active', 0) }}) ·
+                  OZ: {{ oz.get('total', 0) }} (акт: {{ oz.get('active', 0) }}) ·
+                  WB: {{ wb.get('total', 0) }} (акт: {{ wb.get('active', 0) }})
+                </span>
+              </span>
+  
               <label class="toggle-switch">
-                <input type="checkbox" class="supplier-toggle" data-supplier="{{ supplier }}"
-                    {% if global_stock_flags['suppliers'].get(supplier, True) %}checked{% endif %}>
+                <input type="checkbox"
+                       class="supplier-toggle"
+                       data-supplier="{{ supplier }}"
+                       {% if global_stock_flags['suppliers'].get(supplier, True) %}checked{% endif %}>
                 <span class="toggle-slider"></span>
               </label>
             </label>
           {% endfor %}
-        </div>
-
-
-        <!-- Блок поиска + алфавит -->
-        <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 12px; margin-top: -25px; margin-bottom: -20px; width: 100%;">
-
-          <!-- Кнопки "Статистика" и "Новые товары" друг над другом -->
-            <div style="display: flex; flex-direction: column; gap: 10px; margin-right: 15px;">
-              <a href="/statistic"
-                   style="display: flex; align-items: center; gap: 6px;
-                          padding: 6px 12px; font-size: 15px;
-                          border-radius: 6px; border: 1px solid #ccc;
-                          background-color: #f0f0f0;
-                          color: #333; text-decoration: none;
-                          transition: all 0.2s;">
-                  <img src="{{ url_for('static', filename='icons/stats.svg') }}" alt="Статистика" width="16" height="16">
-                  Статистика
-                  {% if has_errors %}
-                    <span class="error-indicator">🟠</span>
-                  {% endif %}
-                </a>
-
-              <a href="/download_unlisted"
-                 style="display: flex; align-items: center; gap: 6px;
-                        padding: 6px 12px; font-size: 15px;
-                        border-radius: 6px; border: 1px solid #ccc;
-                        background-color: #f0f0f0;
-                        color: #333; text-decoration: none;
-                        transition: all 0.2s;">
-                <img src="{{ url_for('static', filename='icons/file-upload.svg') }}" alt="Загрузка" width="16" height="16">
-                Новые товары
-              </a>
-            </div>
-
-          <!-- Алфавит -->
-            <div class="letter-filter" style="display:flex; flex-direction:column; gap: var(--stack-gap);">
-            <div style="display: flex; flex-wrap: wrap; gap: 6px;">
-              {% set row1 = ['0-9', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M'] %}
-              {% for letter in row1 %}
-                <a href="{{ url_for('show_table', table_name=selected_table, letter=letter, search=request.args.get('search', '')) }}"
-                   class="{% if request.args.get('letter') == letter %}active{% endif %}">
-                  {{ letter }}
-                </a>
-              {% endfor %}
-            </div>
-            <div style="display: flex; flex-wrap: wrap; gap: 6px;">
-              {% set row2 = ['N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'А-Я'] %}
-              {% for letter in row2 %}
-                <a href="{{ url_for('show_table', table_name=selected_table, letter=letter, search=request.args.get('search', '')) }}"
-                   class="{% if request.args.get('letter') == letter %}active{% endif %}">
-                  {{ letter }}
-                </a>
-              {% endfor %}
-            </div>
-          </div>
-
-          <!-- Поисковая форма -->
-          <div style="display:flex; flex-direction:column; gap: var(--stack-gap); margin-left: 10px;">
-              <form method="GET" action="/table/{{ selected_table }}"
-                    style="display: flex; align-items: center; gap: 10px;">
-                <div style="position: relative;">
-                  <input type="search" id="custom-search" name="search"
-                         placeholder="Поиск: Арт_MC, Поставщик, Модель"
-                         value="{{ request.args.get('search', '') }}"
-                         style="font-size: 15px; padding: 6px 32px 6px 12px; border-radius: 6px;
-                                width: 300px; box-sizing: border-box; border: 1px solid #ccc;"
-                         onsearch="this.value=''; this.form.submit();">
-                  <span id="clear-search"
-                        style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
-                               cursor: pointer; font-size: 16px; color: #aaa; display: none;">&times;</span>
-                </div>
-                <button type="submit"
-                        style="display: flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 15px;
-                               border-radius: 6px; border: 1px solid #ccc; background-color: #f0f0f0;
-                               cursor: pointer; transition: all 0.2s;">
-                  <img src="{{ url_for('static', filename='icons/search.svg') }}" alt="🔍" width="16" height="16">
-                  Найти
-                </button>
-              </form>
-              <div style="font-size: 13px; color: #777; display: flex; align-items: center; gap: 10px;">
-                  <a href="/download_log"
-                       style="text-decoration: none; color: #777;
-                              display: inline-flex; align-items: center; justify-content: center;
-                              height: var(--ctl-h); padding: 0 var(--ctl-pad-x);
-                              border: 1px solid #ccc; border-radius: var(--ctl-radius);
-                              font-size: var(--ctl-font); background: #f8f8f8; cursor: pointer;"
-                       download>log</a>
-
-                  <!-- Групповая корректировка наценки -->
-                  <div style="display:flex; align-items:center; gap:6px; margin-left: 73px;">
-                    <span style="font-size:14px; color:#555;">Наценка:</span>
-                    <button type="button" id="btn-markdown-dec"
-                            style="padding:2px 8px; border:1px solid #ccc; border-radius:6px; background:#f8f8f8; cursor:pointer;">
-                      −1%
-                    </button>
-                    <button type="button" id="btn-markdown-inc"
-                            style="padding:2px 8px; border:1px solid #ccc; border-radius:6px; background:#f8f8f8; cursor:pointer;">
-                      +1%
-                    </button>
-                  </div>
-                </div>
-
-                <script>
-                (function(){
-                  const selected = "{{ selected_table }}";
-                  function adjust(delta){
-                    document.getElementById('btn-markdown-dec')?.setAttribute('disabled', 'disabled');
-                    document.getElementById('btn-markdown-inc')?.setAttribute('disabled', 'disabled');
-
-                    fetch(`/bulk_markup/${selected}`, {
-                      method: 'POST',
-                      headers: {'Content-Type':'application/x-www-form-urlencoded'},
-                      body: `delta=${delta}`
-                    }).then(r => {
-                      if (r.ok){
-                        Swal.fire({
-                          toast:true, position:'top-end', icon:'success',
-                          title: (delta>0?'+1%':'-1%')+' применено',
-                          showConfirmButton:false, timer:1500
-                        });
-                        location.reload();
-                      } else {
-                        Swal.fire('Ошибка', 'Не удалось изменить наценку', 'error');
-                      }
-                    }).catch(() => {
-                      Swal.fire('Ошибка', 'Сетевая ошибка', 'error');
-                    }).finally(()=>{
-                      document.getElementById('btn-markdown-dec')?.removeAttribute('disabled');
-                      document.getElementById('btn-markdown-inc')?.removeAttribute('disabled');
-                    });
-                  }
-                  document.getElementById('btn-markdown-dec')?.addEventListener('click', ()=>adjust(-1));
-                  document.getElementById('btn-markdown-inc')?.addEventListener('click', ()=>adjust(1));
-                })();
-                </script>
-
-            </div>
-
-
-
-
-
+      </div>
+    </div>
+  
         {% if table_data is not none %}
             <div class="table-container">
               <!-- Фиксированные заголовки -->
@@ -1733,7 +1761,7 @@ let isEditingRow = false;
 <script>
 document.addEventListener("DOMContentLoaded", function () {
   const input = document.getElementById("custom-search");
-  const clearBtn = document.getElementById("clear-search");
+  const clearBtn = document.getElementById("clear-search-new");
   const form = input.closest("form");
 
   if (!input || !clearBtn || !form) return;

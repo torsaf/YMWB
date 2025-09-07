@@ -45,18 +45,48 @@ def send_telegram_message(message: str):
 
 def disable_invask_if_needed():
     try:
-        logger.info("⏱️ CRON: Автоотключение поставщика Invask (вызов toggle_supplier)")
-        requests.post("http://127.0.0.1:5050/toggle_supplier/Invask")
+        current = global_stock_flags.get("suppliers", {}).get("Invask", True)
+        if current:
+            logger.info("⏱️ CRON: Пятница — Invask сейчас ON → выключаем (toggle)")
+            requests.post("http://127.0.0.1:5050/toggle_supplier/Invask")
+        else:
+            logger.info("⏱️ CRON: Пятница — Invask уже OFF → ничего не делаем")
     except Exception as e:
         logger.warning(f"❌ CRON: Ошибка при отключении Invask: {e}")
 
 
 def enable_invask_if_needed():
     try:
-        logger.info("⏱️ CRON: Автовключение поставщика Invask (вызов toggle_supplier)")
-        requests.post("http://127.0.0.1:5050/toggle_supplier/Invask")
+        current = global_stock_flags.get("suppliers", {}).get("Invask", True)
+        if not current:
+            logger.info("⏱️ CRON: Воскресенье — Invask сейчас OFF → включаем (toggle)")
+            requests.post("http://127.0.0.1:5050/toggle_supplier/Invask")
+        else:
+            logger.info("⏱️ CRON: Воскресенье — Invask уже ON → ничего не делаем")
     except Exception as e:
         logger.warning(f"❌ CRON: Ошибка при включении Invask: {e}")
+
+def disable_okno_if_needed():
+    try:
+        current = global_stock_flags.get("suppliers", {}).get("Okno", True)
+        if current:
+            logger.info("⏱️ CRON: Пятница — Okno сейчас ON → выключаем (toggle)")
+            requests.post("http://127.0.0.1:5050/toggle_supplier/Okno")
+        else:
+            logger.info("⏱️ CRON: Пятница — Okno уже OFF → ничего не делаем")
+    except Exception as e:
+        logger.warning(f"❌ CRON: Ошибка при отключении Okno: {e}")
+
+def enable_okno_if_needed():
+    try:
+        current = global_stock_flags.get("suppliers", {}).get("Okno", True)
+        if not current:
+            logger.info("⏱️ CRON: Воскресенье — Okno сейчас OFF → включаем (toggle)")
+            requests.post("http://127.0.0.1:5050/toggle_supplier/Okno")
+        else:
+            logger.info("⏱️ CRON: Воскресенье — Okno уже ON → ничего не делаем")
+    except Exception as e:
+        logger.warning(f"❌ CRON: Ошибка при включении Okno: {e}")
 
 
 def backup_database():
@@ -474,6 +504,23 @@ def show_table(table_name):
     try:
         supplier_df = pd.read_sql_query("SELECT DISTINCT Поставщик FROM marketplace", conn_sup)
         suppliers_list = sorted(s for s in supplier_df['Поставщик'].dropna().unique() if s.strip())
+        # 👉 Счётчики по поставщикам и маркетплейсам: всего и активных (Нал > 0)
+        conn_cnt = sqlite3.connect(DB_PATH)
+        cnt_df = pd.read_sql_query("""
+            SELECT Поставщик,
+                   LOWER(Маркетплейс) AS mp,
+                   COUNT(*) AS total,
+                   SUM(CASE WHEN CAST(COALESCE(Нал, 0) AS INTEGER) > 0 THEN 1 ELSE 0 END) AS active
+            FROM marketplace
+            GROUP BY Поставщик, LOWER(Маркетплейс)
+        """, conn_cnt)
+        conn_cnt.close()
+
+        supplier_counts = {}
+        for _, r in cnt_df.iterrows():
+            sup = r['Поставщик'] or ''
+            mp = r['mp']
+            supplier_counts.setdefault(sup, {})[mp] = {'total': int(r['total'] or 0), 'active': int(r['active'] or 0)}
     except Exception:
         suppliers_list = []
     conn_sup.close()
@@ -499,7 +546,9 @@ def show_table(table_name):
         global_stock_flags=global_stock_flags,
         saved_form_data=saved_form_data,
         suppliers_list=suppliers_list,
-        has_errors = has_errors
+        supplier_counts=supplier_counts,
+        has_errors=has_errors
+
     )
 
 
@@ -947,6 +996,8 @@ if __name__ == '__main__':
         scheduler.add_job(backup_database, 'cron', hour=2)  # каждый день в 2 ночи
         scheduler.add_job(disable_invask_if_needed, 'cron', day_of_week='fri', hour=1, minute=0)
         scheduler.add_job(enable_invask_if_needed, 'cron', day_of_week='sun', hour=23, minute=0)
+        scheduler.add_job(disable_okno_if_needed, 'cron', day_of_week='fri', hour=1, minute=0)
+        scheduler.add_job(enable_okno_if_needed, 'cron', day_of_week='sun', hour=23, minute=0)
         scheduler.start()
         logger.info("📅 Планировщик запущен (обновление склада каждые 5 минут)")
     logger.info("🚀 Приложение запущено")
