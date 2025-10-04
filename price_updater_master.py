@@ -51,8 +51,8 @@ def update_yandex():
         conn = sqlite3.connect('System/marketplace_base.db', timeout=10)
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT `Арт_MC`, `Цена` FROM marketplace
-            WHERE `Маркетплейс` = 'yandex' AND `Арт_MC` IS NOT NULL AND `Цена` IS NOT NULL
+            SELECT `Sklad`, `Цена` FROM marketplace
+            WHERE `Маркетплейс` = 'yandex' AND `Sklad` IS NOT NULL AND `Цена` IS NOT NULL
         """)
         rows = cursor.fetchall()
         logger.debug(f"📥 Загружено {len(rows)} строк из базы для Yandex")
@@ -95,8 +95,8 @@ def update_ozon():
         conn = sqlite3.connect('System/marketplace_base.db')
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT `Арт_MC`, `Цена` FROM marketplace
-            WHERE `Маркетплейс` = 'ozon' AND `Арт_MC` IS NOT NULL AND `Цена` IS NOT NULL
+            SELECT `Sklad`, `Цена` FROM marketplace
+            WHERE `Маркетплейс` = 'ozon' AND `Sklad` IS NOT NULL AND `Цена` IS NOT NULL
         """)
         rows = cursor.fetchall()
         logger.debug(f"📥 Загружено {len(rows)} строк из базы для Ozon")

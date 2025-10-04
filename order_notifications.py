@@ -37,6 +37,7 @@ from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from logger_config import logger
 from notifiers import get_notifier
+from web_app import choose_best_supplier_for_row
 
 # Загрузка переменных окружения из .env
 load_dotenv(dotenv_path=os.path.join("System", ".env"))
@@ -55,7 +56,7 @@ def update_stock(articul, platform, quantity=1):
     articul = str(articul).strip()
 
     df = pd.read_sql_query(
-        "SELECT * FROM marketplace WHERE Арт_MC = ? AND Маркетплейс = ?",
+        "SELECT * FROM marketplace WHERE Sklad = ? AND Маркетплейс = ?",
         conn,
         params=(articul, platform)
     )
@@ -73,13 +74,17 @@ def update_stock(articul, platform, quantity=1):
     row = df.iloc[0]
     model = row.get("Модель", "Неизвестно")
     stock = int(row.get("Нал", 0))
-    supplier = row.get("Поставщик", "N/A")
+    # Определяем поставщика по новой логике
+    row_dict = row.to_dict()
+    chosen_supplier, _, _ = choose_best_supplier_for_row(row_dict, None, use_row_sklad=True)
+    supplier = chosen_supplier or "N/A"
     opt_price = format_price(row.get("Опт"))
-    artikul_alt = row.get("Артикул", "")
+    artikul_alt = row.get(supplier, "")
     rrc_price = format_price(row.get("Цена", None))
 
     if supplier.lower() == 'sklad':
         try:
+            # --- Работа с Google Sheets ---
             gc = gspread.service_account(filename='System/my-python-397519-3688db4697d6.json')
             sh = gc.open("КАЗНА")
             worksheet = sh.worksheet("СКЛАД")
@@ -90,80 +95,73 @@ def update_stock(articul, platform, quantity=1):
             sklad['Арт мой'] = sklad['Арт мой'].apply(lambda x: str(int(x)) if str(x).isdigit() else '')
 
             matched_rows = sklad[sklad['Арт мой'] == articul]
-            if matched_rows.empty:
-                conn.close()
-                return
+            if not matched_rows.empty:
+                row_index = matched_rows.index[0]
+                prev_q = sklad.at[row_index, 'Наличие']
+                sklad.at[row_index, 'Наличие'] = max(0, prev_q - quantity)
+                new_q = sklad.at[row_index, 'Наличие']
 
-            row_index = matched_rows.index[0]
-            prev_q = sklad.at[row_index, 'Наличие']
-            sklad.at[row_index, 'Наличие'] = max(0, prev_q - quantity)
-            new_q = sklad.at[row_index, 'Наличие']
+                updated_data = sklad.iloc[:, :8].replace([float('inf'), float('-inf')], 0).fillna(0).values.tolist()
+                worksheet.update(values=updated_data, range_name='A2:H')
 
-            updated_data = sklad.iloc[:, :8].replace([float('inf'), float('-inf')], 0).fillna(0).values.tolist()
-            worksheet.update(values=updated_data, range_name='A2:H')
-
-            message = (
-                f"✅ Бот вычел со склада\n\n"
-                f"Товар: \"{model}\"\n"
-                f"Артикул: *{articul}*\n"
-                f"Опт: {opt_price}, РРЦ: {rrc_price}\n"
-                f"Было: {prev_q} ➡️ стало: {new_q}\n"
-                f"Склад: {supplier}"
-            )
-            telegram.notify(token=telegram_got_token, chat_id=telegram_chat_id, message=message, parse_mode='markdown')
-
+                telegram.notify(
+                    token=telegram_got_token, chat_id=telegram_chat_id,
+                    message=(f"✅ Бот вычел со склада\n\n"
+                             f"Товар: \"{model}\"\nАртикул: *{articul}*\n"
+                             f"Опт: {opt_price}, РРЦ: {rrc_price}\n"
+                             f"Было: {prev_q} ➡️ стало: {new_q}\n"
+                             f"Склад: {supplier}"),
+                    parse_mode='markdown'
+                )
         except Exception as e:
             logger.error(f"❌ Ошибка при работе с Google Sheets: {e}")
-            error_message = (
-                f"⚠️ *Ошибка при доступе к Google Sheets!*\n\n"
-                f"Товар: \"{model}\"\n"
-                f"Артикул: *{articul}*\n"
-                f"Платформа: {platform}\n"
-                f"Не удалось вычесть остаток на складе (Sklad).\n"
-                f"Пожалуйста, вычтите вручную."
+            telegram.notify(
+                token=telegram_got_token, chat_id=telegram_chat_id,
+                message=(f"⚠️ Ошибка доступа к Google Sheets для {model} ({articul})"),
+                parse_mode='markdown'
             )
-            telegram.notify(token=telegram_got_token, chat_id=telegram_chat_id, message=error_message, parse_mode='markdown')
 
-    else:
-        new_stock = max(0, stock - quantity)
-        cur = conn.cursor()
-        cur.execute(
-            "UPDATE marketplace SET Нал = ?, \"Дата изменения\" = ? WHERE Арт_MC = ? AND Маркетплейс = ?",
-            (new_stock, datetime.now().strftime("%d.%m.%Y %H:%M"), articul, platform)
+    # --- Общая часть: обновляем marketplace_base.db + !YMWB.db ---
+    new_stock = max(0, stock - quantity)
+    cur = conn.cursor()
+    cur.execute(
+        "UPDATE marketplace SET Нал = ?, \"Дата изменения\" = ? WHERE Sklad = ?",
+        (new_stock, datetime.now().strftime("%d.%m.%Y %H:%M"), articul)
+    )
+    conn.commit()
+    logger.success(f"✅ Остаток обновлён везде: {articul} | {stock} → {new_stock}")
+
+    try:
+        alt_db_path = "System/!YMWB.db"
+        alt_conn = sqlite3.connect(alt_db_path, timeout=10)
+        alt_cur = alt_conn.cursor()
+
+        alt_df = pd.read_sql_query("SELECT rowid, * FROM prices WHERE Артикул = ?", alt_conn, params=(artikul_alt,))
+        if not alt_df.empty:
+            for _, alt_row in alt_df.iterrows():
+                rowid = alt_row["rowid"]
+                current_qty = int(alt_row.get("Наличие", 0))
+                updated_qty = max(0, current_qty - quantity)
+                alt_cur.execute("UPDATE prices SET Наличие = ? WHERE rowid = ?", (updated_qty, rowid))
+                logger.debug(f"🔧 YMWB: {artikul_alt} | {current_qty} → {updated_qty}")
+            alt_conn.commit()
+        else:
+            logger.warning(f"❗ Артикул {artikul_alt} не найден в !YMWB.db")
+    except Exception as e:
+        logger.error(f"❌ Ошибка при обновлении !YMWB.db: {e}")
+    finally:
+        alt_conn.close()
+
+    if supplier.lower() != 'sklad':
+        telegram.notify(
+            token=telegram_got_token, chat_id=telegram_chat_id,
+            message=(f"✅ Бот вычел со склада\n\n"
+                     f"Товар: \"{model}\"\nАртикул: *{articul}*\n"
+                     f"Опт: {opt_price}, РРЦ: {rrc_price}\n"
+                     f"Было: {stock} ➡️ стало: {new_stock}\n"
+                     f"Склад: {supplier}"),
+            parse_mode='markdown'
         )
-        conn.commit()
-        logger.success(f"✅ Остаток обновлён: {articul} | {stock} → {new_stock}")
-
-        try:
-            alt_db_path = "System/!YMWB.db"
-            alt_conn = sqlite3.connect(alt_db_path, timeout=10)
-            alt_cur = alt_conn.cursor()
-
-            alt_df = pd.read_sql_query("SELECT rowid, * FROM prices WHERE Артикул = ?", alt_conn, params=(artikul_alt,))
-            if not alt_df.empty:
-                for _, alt_row in alt_df.iterrows():
-                    rowid = alt_row["rowid"]
-                    current_qty = int(alt_row.get("Наличие", 0))
-                    updated_qty = max(0, current_qty - quantity)
-                    alt_cur.execute("UPDATE prices SET Наличие = ? WHERE rowid = ?", (updated_qty, rowid))
-                    logger.debug(f"🔧 YMWB: {artikul_alt} | {current_qty} → {updated_qty}")
-                alt_conn.commit()
-            else:
-                logger.warning(f"❗ Артикул {artikul_alt} не найден в !YMWB.db")
-        except Exception as e:
-            logger.error(f"❌ Ошибка при обновлении !YMWB.db: {e}")
-        finally:
-            alt_conn.close()
-
-        message = (
-            f"✅ Бот вычел со склада\n\n"
-            f"Товар: \"{model}\"\n"
-            f"Артикул: *{articul}*\n"
-            f"Опт: {opt_price}, РРЦ: {rrc_price}\n"
-            f"Было: {stock} ➡️ стало: {new_stock}\n"
-            f"Склад: {supplier}"
-        )
-        telegram.notify(token=telegram_got_token, chat_id=telegram_chat_id, message=message, parse_mode='markdown')
 
     conn.close()
 
@@ -176,7 +174,7 @@ def get_orders_yandex_market():
     url_ym = f'https://api.partner.market.yandex.ru/campaigns/{campaign_id}/orders'
     headers = {"Authorization": f"Bearer {ym_token}"}
     params = {
-        "fake": "False",
+        "fake": "True",
         "status": "PROCESSING",
         "substatus": "STARTED"
     }
@@ -278,14 +276,14 @@ file_path = 'System/order_ids.txt'
 
 # Функция, которая берет название товара из файла, когда есть заказ с WB
 def get_product(art_mc):
-    """Получает название модели из таблицы marketplace по Арт_MC (например, артикул Wildberries)."""
+    """Получает название модели из таблицы marketplace по Sklad (например, артикул Wildberries)."""
     db_path = 'System/marketplace_base.db'
     try:
         conn = sqlite3.connect(db_path, timeout=10)
         cursor = conn.cursor()
         cursor.execute("""
             SELECT Модель FROM marketplace 
-            WHERE [Арт_MC] = ? AND lower(Маркетплейс) = 'wildberries'
+            WHERE [Sklad] = ? AND lower(Маркетплейс) = 'wildberries'
         """, (str(art_mc),))
         result = cursor.fetchone()
         return result[0] if result else None
@@ -332,7 +330,8 @@ def notify_about_new_orders(orders, platform, supplier):
 
                 message += f"\nАртикул: {offer_id}\n"
                 message += f"Товар: {offer_name}\n"
-                message += f"Количество: {qty} шт.\n"
+                qty_marker = " ⚠️" if qty > 1 else ""
+                message += f"Количество: {qty} шт.{qty_marker}\n"
                 message += f"Цена: {total_price} р.\n"
                 items_to_update.append((offer_id, qty))
 
@@ -344,7 +343,8 @@ def notify_about_new_orders(orders, platform, supplier):
 
             message += f"Артикул: {article}\n"
             message += f"Товар: {model}\n"
-            message += f"Количество: {qty} шт.\n"
+            qty_marker = " ⚠️" if qty > 1 else ""
+            message += f"Количество: {qty} шт.{qty_marker}\n"
             message += f"Цена: {price} р.\n"
             items_to_update.append((article, qty))
 
@@ -366,7 +366,8 @@ def notify_about_new_orders(orders, platform, supplier):
 
                 message += f"\nАртикул: {offer_id}\n"
                 message += f"Товар: {product_name}\n"
-                message += f"Количество: {qty} шт.\n"
+                qty_marker = " ⚠️" if qty > 1 else ""
+                message += f"Количество: {qty} шт.{qty_marker}\n"
                 message += f"Цена: {price} р.\n"
                 items_to_update.append((offer_id, qty))
 
@@ -378,81 +379,25 @@ def notify_about_new_orders(orders, platform, supplier):
             logger.debug(f"🔧 Вызываем update_stock для {offer_id} | Платформа: {platform}, Кол-во: {qty}")
             update_stock(offer_id, platform, qty)
 
-        # 3. Сообщаем об успешном вычитании
+        # --- Сразу после заказа обновляем маркетплейсы ---
+        try:
+            from stock import gen_sklad, wb_update, ym_update, oz_update
+
+            wb_data, ym_data, oz_data = gen_sklad()
+
+            if wb_data:
+                wb_update(wb_data)
+            if ym_data:
+                ym_update(ym_data)
+            if oz_data:
+                oz_update(oz_data)
+
+            logger.success("✅ Остатки сразу отправлены на все маркетплейсы")
+        except Exception as e:
+            logger.error(f"❌ Ошибка при мгновенном обновлении маркетплейсов: {e}")
+
+        # Уведомление о завершении обработки заказа
         telegram.notify(token=telegram_got_token, chat_id=telegram_chat_id, message="📦")
-
-
-
-# def notify_about_new_orders(orders, platform, supplier):
-#     if not orders:
-#         pass
-#         # message = f"Новых заказов на {platform} от {supplier} нет."
-#         # telegram.notify(token=telegram_got_token, chat_id=telegram_chat_id, message=message)
-#     else:
-#         for order in orders:
-#             # Запись ID заказа в файл перед добавлением товаров в сообщение
-#             order_id = order.get('posting_number') if supplier == 'Ozon' else order.get('id')
-#             # Запись ID заказа в файл перед добавлением товаров в сообщение
-#             if write_order_id_to_file(order_id, file_path):
-#                 logger.info(f"📦 Новый заказ: {order_id} ({platform})")
-#                 message = f"📦 Новый заказ на *{platform}*:\n\n"
-#                 message += f"ID заказа: {order_id}\n"
-#                 if supplier == 'Yandex':
-#                     # Добавляем дату отгрузки
-#                     shipment_date = next(
-#                         (shipment.get('shipmentDate') for shipment in order.get('delivery', {}).get('shipments', [])),
-#                         'Не указано'
-#                     )
-#                     message += f"Дата отгрузки: {shipment_date}\n"
-#                     for item in order.get('items', []):
-#                         # Артикул товара
-#                         offer_id = item.get('offerId', 'Не указан')
-#                         # Имя товара
-#                         offer_name = item.get('offerName', 'Не указано')
-#                         # Цена товара
-#                         subsidy_amount = next(
-#                             (subsidy.get('amount') for subsidy in item.get('subsidies', []) if
-#                              subsidy.get('type') == 'SUBSIDY'), 0
-#                         )
-#                         price = int(item.get('buyerPrice', 0))
-#                         total_price = int(subsidy_amount + price)
-#                         # Добавляем информацию о товаре
-#                         message += f"Артикул: {offer_id}\n"
-#                         message += f"Товар: {offer_name}\n"
-#                         message_minus_odin = offer_id
-#                         message += f"Цена: {total_price} р.\n"
-#                 elif supplier == 'Wildberries':
-#                     message += f"Артикул: {order.get('article')} \n"
-#                     message += f"Товар: {get_product(order.get('nmId'))} \n"
-#                     message += f"Цена: {str(order.get('convertedPrice'))[:-2]} р.\n"
-#                     message_minus_odin = order.get('article')
-#                 elif supplier == 'Ozon':  # Добавляем поддержку Ozon
-#                     shipment_date_raw = order.get('shipment_date')  # Получаем дату отгрузки
-#                     # Преобразуем дату из ISO 8601 в формат DD.MM.YYYY
-#                     if shipment_date_raw:
-#                         shipment_date = datetime.strptime(shipment_date_raw, "%Y-%m-%dT%H:%M:%SZ").strftime("%d.%m.%Y")
-#                         message += f"Дата отгрузки: {shipment_date}\n"
-#                     else:
-#                         shipment_date = "Не указана"
-#                         message += f"Дата отгрузки: {shipment_date}\n"
-#
-#                     for product in order.get('products', []):
-#                         message += f"Артикул: {product['offer_id']}\n"
-#                         message += f"Товар: {product['name']}\n"  # Получаем название товара
-#                         # Округляем цену до целого числа, чтобы убрать ".0000"
-#                         price = int(float(product['price']))
-#                         message += f"Цена: {price} р.\n"  # Форматируем цену
-#                         message_minus_odin = product.get('offer_id')
-#
-#                 message += '\n'
-#                 telegram.notify(token=telegram_got_token, chat_id=telegram_chat_id, message=message,
-#                                 parse_mode='markdown')
-#                 # Затем вычитаем товар со склада
-#                 if message_minus_odin:  # Если товар определён
-#                     logger.debug(f"🔧 Вызываем update_stock для {message_minus_odin} | Платформа: {platform}")
-#                     update_stock(message_minus_odin, platform)
-#                 message1 = '📦'
-#                 telegram.notify(token=telegram_got_token, chat_id=telegram_chat_id, message=message1)
 
 
 def check_for_new_orders():

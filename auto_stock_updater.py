@@ -35,59 +35,101 @@ def update(flags):
             article = str(article).strip()
             stock = int(str(stock).strip())
             opt = int(str(opt).strip())
-            if stock < 3:
+            if supplier != "Sklad" and stock < 3:
                 stock = 0  # Принудительное обнуление, если меньше 3
             source_dict[(supplier, article)] = (stock, opt)
         except Exception as e:
             logger.warning(f"❌ Ошибка при обработке строки из prices: {e}")
 
     cursor = target_conn.cursor()
-    cursor.execute("""SELECT rowid, Маркетплейс, Поставщик, Артикул, Статус, Модель, Нал, Опт, Наценка FROM marketplace""")
+    cursor.execute("""
+        SELECT rowid, Маркетплейс,
+               Sklad, Invask, Okno, United,
+               Статус, Модель, Нал, Опт, "%"
+        FROM marketplace
+    """)
     all_rows = cursor.fetchall()
 
     updated = 0
 
     for row in all_rows:
-        rowid, mp, supplier, article, status, model, old_stock, old_opt, markup = row
-        mp = mp.strip().lower()
-        supplier = supplier.strip()
-        article = article.strip()
+        (rowid, mp,
+         code_sklad, code_invask, code_okno, code_united,
+         status, model, old_stock, old_opt, markup) = row
+
+        mp = (mp or "").strip().lower()
         status = (status or "").strip().lower()
         model = model or "—"
 
         if not flags.get(mp, True):
             continue
 
-        if not flags.get("suppliers", {}).get(supplier, True):
-            continue
-
-        key = (supplier, article)
-
         # === Обработка выключенных товаров ===
         if status == "выкл.":
-            if old_stock != 0:
-                logger.debug(f"⛔ {mp} | {article} ({model}) — статус 'выкл.' → обнуляем stock")
+            if str(old_stock).strip() != "0":
+                logger.debug(f"⛔ {mp} | {model} — статус 'выкл.' → Нал = 0")
                 cursor.execute("""
-                    UPDATE marketplace SET Нал = 0, "Дата изменения" = ? WHERE rowid = ?
+                    UPDATE marketplace
+                       SET Нал = 0, "Дата изменения" = ?
+                     WHERE rowid = ?
                 """, (datetime.now().strftime("%d.%m.%Y %H:%M"), rowid))
             continue
 
-        if key not in source_dict:
-            # logger.debug(f"❌ Пропуск {mp} | {supplier} / {article} — отсутствует в source_dict")
-            continue
+        # --- 1) Приоритет Sklad ---
+        chosen_supplier = ""
+        chosen_stock = 0
+        chosen_opt = None
 
-        new_stock, new_opt = source_dict[key]
+        def get_from_source(supplier_name, code_value):
+            if not code_value:
+                return 0, None
+            key = (supplier_name, str(code_value).strip())
+            return source_dict.get(key, (0, None))
 
+        # Sklad без порога: если Нал ≥ 1 — берём без сравнений
+        if code_sklad:
+            stock_sklad, opt_sklad = get_from_source("Sklad", code_sklad)
+            if stock_sklad >= 1:
+                chosen_supplier = "Sklad"
+                chosen_stock = int(stock_sklad)
+                chosen_opt = opt_sklad
+
+        # --- 2) Иначе — лучший из Invask/Okno/United по минимальному ОПТ при Нал > 0 ---
+        if not chosen_supplier:
+            candidates = []
+            for sup_name, sup_code in (("Invask", code_invask),
+                                       ("Okno", code_okno),
+                                       ("United", code_united)):
+                stock_val, opt_val = get_from_source(sup_name, sup_code)
+                if (stock_val or 0) > 0 and (opt_val is not None):
+                    candidates.append((sup_name, int(stock_val), float(opt_val)))
+
+            if candidates:
+                # минимальный ОПТ; при равенстве — приоритет Invask > Okno > United
+                order = {"Invask": 0, "Okno": 1, "United": 2}
+                candidates.sort(key=lambda x: (x[2], order.get(x[0], 9)))
+                chosen_supplier, chosen_stock, chosen_opt = candidates[0]
+
+        # --- 3) Если никого не нашли — обнуляем Нал, цену не трогаем ---
+        if not chosen_supplier:
+            new_stock = 0
+            new_opt = old_opt
+        else:
+            new_stock = chosen_stock
+            new_opt = chosen_opt if chosen_opt is not None else old_opt
+
+        # Пересчёт цены (как у тебя): округление до сотен
         try:
             markup = float(str(markup).replace('%', '').replace(' ', '')) if markup else 0.0
         except:
             markup = 0.0
-
         try:
-            new_price = round((new_opt + new_opt * markup / 100) / 100.0) * 100
+            base_opt = float(str(new_opt).replace(' ', '').replace('р.', '')) if new_opt is not None else 0.0
         except:
-            new_price = new_opt
+            base_opt = 0.0
+        new_price = round((base_opt + base_opt * markup / 100.0) / 100.0) * 100
 
+        # Приведение старых значений к числам
         try:
             old_stock = int(old_stock)
         except:
@@ -101,33 +143,49 @@ def update(flags):
         row_price = cursor.fetchone()
         old_price = int(row_price[0]) if row_price and str(row_price[0]).isdigit() else 0
 
-        if (old_stock != new_stock) or (old_opt != new_opt) or (old_price != new_price):
+        if (old_stock != new_stock) or (old_opt != int(base_opt)) or (old_price != int(new_price)):
             logger.debug(
-                f"✅ {mp} | {article} ({model}) → "
+                f"✅ {mp} | {model} → "
                 f"stock: {old_stock} → {new_stock}, "
-                f"opt: {old_opt} → {new_opt}, "
-                f"price: {old_price} → {new_price}"
+                f"opt: {old_opt} → {int(base_opt)}, "
+                f"price: {old_price} → {int(new_price)}"
             )
             cursor.execute("""
                 UPDATE marketplace
-                SET Нал = ?, Опт = ?, Цена = ?, "Дата изменения" = ?
-                WHERE rowid = ?
-            """, (new_stock, new_opt, new_price, datetime.now().strftime("%d.%m.%Y %H:%M"), rowid))
+                   SET Нал = ?, Опт = ?, Цена = ?, "Дата изменения" = ?
+                 WHERE rowid = ?
+            """, (new_stock, int(base_opt), int(new_price), datetime.now().strftime("%d.%m.%Y %H:%M"), rowid))
             updated += 1
 
-    # === Обнуляем "Нал" у отсутствующих в source_dict ===
-    logger.info("🧹 Проверка товаров, отсутствующих в source_dict")
-    cursor.execute("""SELECT rowid, Поставщик, Артикул, Нал, Статус, Модель FROM marketplace""")
-    all_rows = cursor.fetchall()
-
-    for rowid, supplier, article, nal, status, model in all_rows:
-        key = (supplier.strip(), article.strip())
-        if key not in source_dict and supplier.strip() != "Sklad":
-            if str(nal).strip() != "0":
-                logger.debug(f"❌ {supplier} / {article} ({model}) нет в прайсе → Нал = 0")
-                cursor.execute("""
-                    UPDATE marketplace SET Нал = 0, "Дата изменения" = ? WHERE rowid = ?
-                """, (datetime.now().strftime("%d.%m.%Y %H:%M"), rowid))
+    # === Обнуляем Нал у тех строк, где ни один из поставщиков не даёт наличия >0 ===
+    logger.info("🧹 Проверка товаров без доступного поставщика")
+    cursor.execute("""
+        SELECT rowid, Статус, Модель, Нал, Sklad, Invask, Okno, United
+        FROM marketplace
+    """)
+    for rowid, status, model, nal, code_sklad, code_invask, code_okno, code_united in cursor.fetchall():
+        if (status or "").strip().lower() == "выкл.":
+            continue
+        # есть ли кто-то с Наличием > 0?
+        has_any = False
+        if code_sklad:
+            st, _ = source_dict.get(("Sklad", str(code_sklad).strip()), (0, None))
+            if st >= 1:
+                has_any = True
+        if not has_any:
+            for sup, code in (("Invask", code_invask), ("Okno", code_okno), ("United", code_united)):
+                if not code: continue
+                st, _ = source_dict.get((sup, str(code).strip()), (0, None))
+                if (st or 0) > 0:
+                    has_any = True
+                    break
+        if not has_any and str(nal).strip() != "0":
+            logger.debug(f"❌ Обнуляем: {model} — ни у одного поставщика нет наличия")
+            cursor.execute("""
+                UPDATE marketplace
+                   SET Нал = 0, "Дата изменения" = ?
+                 WHERE rowid = ?
+            """, (datetime.now().strftime("%d.%m.%Y %H:%M"), rowid))
 
     target_conn.commit()
     source_conn.close()

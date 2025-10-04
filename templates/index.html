@@ -351,7 +351,36 @@
         
         .sticky-header, .sticky-input {
             display: grid;
-            grid-template-columns: 30px 80px 90px 80px 250px 70px 60px 90px 70px 100px 180px 80px;
+            /* Порядок колонок:
+               1) №
+               2) Sklad
+               3) Invask
+               4) Okno
+               5) United
+               6) Модель
+               7) Статус
+               8) Нал
+               9) Опт
+               10) %
+               11) Цена
+               12) Комментарий
+               13) Дата изменения
+               14) Действия
+            */
+            grid-template-columns:
+                30px    /* № */
+                80px    /* Sklad */
+                75px    /* Invask */
+                75px    /* Okno */
+                85px    /* United */
+                250px   /* Модель */
+                70px    /* Статус */
+                60px    /* Нал */
+                90px    /* Опт */
+                70px    /* % */
+                180px   /* Комментарий */
+                80px    /* Дата изменения */
+                ;       /* Важно: колонка "Действия" рисуется отдельной .header-cell, см. ниже */
             position: sticky;
             z-index: 100;
             background: white;
@@ -359,9 +388,26 @@
         }
 
         /* 🟣 Специальные grid-template-columns для Wildberries */
+        /* 🟣 Специальные grid-template-columns для Wildberries (Новый порядок и кол-во) */
+        /* Включает все колонки ДФ: № + 14 данных (без «Действия») */
         .header-wildberries.sticky-header,
         .header-wildberries.sticky-input {
-            grid-template-columns: 30px 100px 140px 100px 85px 80px 270px 60px 40px 90px 70px 100px 140px 80px;
+            grid-template-columns:
+                23px   /* № */
+                70px   /* Sklad */
+                105px  /* Invask */
+                80px   /* Okno */
+                75px   /* United */
+                105px  /* WB Barcode */
+                80px   /* WB Артикул */
+                253px  /* Модель */
+                50px   /* Статус */
+                30px   /* Нал */
+                68px   /* Опт */
+                58px   /* % */
+                68px   /* Цена */
+                126px  /* Комментарий */
+                111px  /* Дата изменения */;
         }
         
         .sticky-header {
@@ -422,41 +468,43 @@
             table-layout: fixed;
         }
         /* УМЕНЬШЕННЫЕ НА 10% ШИРИНЫ (Yandex и Ozon) */
-        .main-table td:nth-child(1) { width: 25px !important; }   /* № */
-        .main-table td:nth-child(2) { width: 60px !important; }   /* Арт_MC */
-        .main-table td:nth-child(3) { width: 65px !important; }   /* Поставщик */
-        .main-table td:nth-child(4) { width: 50px !important; }   /* Артикул */
-        .main-table td:nth-child(5) { width: 250px !important; }  /* Модель */
-        .main-table td:nth-child(6) { width: 40px !important; }   /* Статус */
-        .main-table td:nth-child(7) { width: 27px !important; }   /* Нал */
-        .main-table td:nth-child(8) { width: 55px !important; }   /* Опт */
-        .main-table td:nth-child(9) { width: 48px !important; }   /* Наценка */
-        .main-table td:nth-child(10) { width: 55px !important; }  /* Цена YM */
-        .main-table td:nth-child(11) { width: 162px !important; } /* Комментарий */
-        .main-table td:nth-child(12) { width: 99px !important; }  /* Дата изменения */
-        .main-table td:nth-child(13) { width: 63px !important; }  /* Действия */
+        .main-table td:nth-child(1)  { width: 23px !important; }   /* № */
+        .main-table td:nth-child(2)  { width: 35px !important; }   /* Sklad */
+        .main-table td:nth-child(3)  { width: 35px !important; }   /* Invask */
+        .main-table td:nth-child(4)  { width: 35px !important; }   /* Okno */
+        .main-table td:nth-child(5)  { width: 35px !important; }   /* United */
+        .main-table td:nth-child(6)  { width: 250px !important; }  /* Модель */
+        .main-table td:nth-child(7)  { width: 30px !important; }   /* Статус */
+        .main-table td:nth-child(8)  { width: 20px !important; }   /* Нал */
+        .main-table td:nth-child(9)  { width: 45px !important; }   /* Опт */
+        .main-table td:nth-child(10) { width: 28px !important; }   /* % */
+        .main-table td:nth-child(11) { width: 50px !important; }   /* Цена */
+        .main-table td:nth-child(12) { width: 162px !important; }  /* Комментарий */
+        .main-table td:nth-child(13) { width: 75px !important; }   /* Дата изменения */
+        .main-table td:nth-child(14) { width: 48px !important; }   /* Действия */
 
-        /* 🟣 Специальные ширины для таблицы Wildberries */
-        .header-wildberries ~ .table-wrapper .main-table td:nth-child(1) { width: 23px !important; }   /* № */
-        .header-wildberries ~ .table-wrapper .main-table td:nth-child(2) { width: 70px !important; }   /* Арт_MC */
-        .header-wildberries ~ .table-wrapper .main-table td:nth-child(3) { width: 105px !important; }  /* WB Barcode */
-        .header-wildberries ~ .table-wrapper .main-table td:nth-child(4) { width: 80px !important; }   /* WB Артикул */
-        .header-wildberries ~ .table-wrapper .main-table td:nth-child(5) { width: 75px !important; }   /* Поставщик */
-        .header-wildberries ~ .table-wrapper .main-table td:nth-child(6) { width: 58px !important; }   /* Артикул */
-        .header-wildberries ~ .table-wrapper .main-table td:nth-child(7) { width: 253px !important; }  /* Модель */
-        .header-wildberries ~ .table-wrapper .main-table td:nth-child(8) { width: 50px !important; }   /* Статус */
-        .header-wildberries ~ .table-wrapper .main-table td:nth-child(9) { width: 30px !important; }   /* Нал */
-        .header-wildberries ~ .table-wrapper .main-table td:nth-child(10) { width: 68px !important; }  /* Опт */
-        .header-wildberries ~ .table-wrapper .main-table td:nth-child(11) { width: 58px !important; }  /* Наценка */
-        .header-wildberries ~ .table-wrapper .main-table td:nth-child(12) { width: 68px !important; }  /* Цена WB */
-        .header-wildberries ~ .table-wrapper .main-table td:nth-child(13) { width: 126px !important; } /* Комментарий */
-        .header-wildberries ~ .table-wrapper .main-table td:nth-child(14) { width: 111px !important; } /* Дата изменения */
-        .header-wildberries ~ .table-wrapper .main-table td:nth-child(15) { width: 63px !important; }  /* Действия */
+        /* 🟣 Специальные ширины для таблицы Wildberries (новый порядок) */
+        /* 1..16: №, Sklad, Invask, Okno, United, WB Barcode, WB Артикул,
+                  Модель, Статус, Нал, Опт, %, Цена, Комментарий, Дата изменения, Действия */
+        .header-wildberries ~ .table-wrapper .main-table td:nth-child(1)  { width: 30px !important; }   /* № */
+        .header-wildberries ~ .table-wrapper .main-table td:nth-child(2)  { width: 40px !important; }   /* Sklad */
+        .header-wildberries ~ .table-wrapper .main-table td:nth-child(3)  { width: 40px !important; }  /* Invask */
+        .header-wildberries ~ .table-wrapper .main-table td:nth-child(4)  { width: 40px !important; }   /* Okno */
+        .header-wildberries ~ .table-wrapper .main-table td:nth-child(5)  { width: 40px !important; }   /* United */
+        .header-wildberries ~ .table-wrapper .main-table td:nth-child(6)  { width: 90px !important; }  /* WB Barcode */
+        .header-wildberries ~ .table-wrapper .main-table td:nth-child(7)  { width: 65px !important; }   /* WB Артикул */
+        .header-wildberries ~ .table-wrapper .main-table td:nth-child(8)  { width: 253px !important; }  /* Модель */
+        .header-wildberries ~ .table-wrapper .main-table td:nth-child(9)  { width: 40px !important; }   /* Статус */
+        .header-wildberries ~ .table-wrapper .main-table td:nth-child(10) { width: 30px !important; }   /* Нал */
+        .header-wildberries ~ .table-wrapper .main-table td:nth-child(11) { width: 60px !important; }   /* Опт */
+        .header-wildberries ~ .table-wrapper .main-table td:nth-child(12) { width: 30px !important; }   /* % */
+        .header-wildberries ~ .table-wrapper .main-table td:nth-child(13) { width: 60px !important; }   /* Цена */
+        .header-wildberries ~ .table-wrapper .main-table td:nth-child(14) { width: 126px !important; }  /* Комментарий */
+        .header-wildberries ~ .table-wrapper .main-table td:nth-child(15) { width: 100px !important; }  /* Дата изменения */
+        .header-wildberries ~ .table-wrapper .main-table td:nth-child(16) { width: 55px !important; }   /* Действия */
         
 
-        input[type="search"]::-webkit-search-cancel-button {
-            display: none;
-        }
+
         .letter-filter a {
             padding: 6px 10px;
             font-size: 14px;
@@ -750,12 +798,248 @@
         .letter-filter a:hover {
             background-color: #f0f0f0 !important;
         }
+        /* === Компактный режим (уменьшенные шрифты, высота, отступы) === */
+        body.compact .main-table td,
+        body.compact .main-table th,
+        body.compact .main-table input,
+        body.compact .main-table select {
+          font-size: 14px !important;   /* было ~14px/90% */
+          line-height: 1.1;
+        }
+
+        body.compact td,
+        body.compact th {
+          height: 5px;        /* ↓ вместо 22px */
+          max-height: 5px;    /* ↓ вместо 24px */
+          padding: 1px 3px;    /* ↓ вместо 2px 4px */
+        }
+
+        body.compact .header-cell,
+        body.compact .input-cell {
+          min-height: 22px;              /* было ~25px */
+          padding: 2px 4px;              /* было 4px 6px */
+        }
+
+        body.compact .sticky-input input,
+        body.compact .sticky-input select,
+        body.compact .sticky-input button {
+          height: 24px;                  /* было ~30px */
+          font-size: 12px;
+          padding: 2px 6px;
+          border-radius: 4px;
+        }
+
+        /* Чуть плотнее «двухэтажная» шапка (хедер + фильтры) */
+        body.compact .sticky-input { top: 26px; }  /* было 31px */
+        /* Мягкая подсветка активного поставщика */
+        .supplier-active {
+          background: #eaf6ff !important;   /* нежно-голубой */
+        }
+        .supplier-active input {
+          background: #eaf6ff !important;
+        }
+         /* Полное принудительное сжатие строк данных */
+        .main-table tbody tr,
+        .main-table tbody td {
+          height: 0 !important;          /* убираем встроенные размеры */
+          min-height: 0 !important;
+          max-height: none !important;
+          padding: 0 !important;
+          margin: 0 !important;
+          line-height: 1 !important;     /* текст плотный */
+          border-collapse: collapse;
+          vertical-align: middle !important;
+          font-size: 10px !important;
+        }
+
+        /* Инпуты и селекты тоже жмём */
+        .main-table tbody td input,
+        .main-table tbody td select {
+          font-size: 10px !important;
+          height: 100% !important;
+          line-height: 1 !important;
+          padding: 0 !important;
+          margin: 0 !important;
+          box-sizing: border-box;
+        }
+        /* 🔥 Максимальное сжатие строк (кроме шапки и строки ввода) */
+        .main-table tbody tr td {
+          font-size: 11px !important;
+          line-height: 1 !important;
+          height: 23px !important;           /* ячейки остаются низкими */
+          padding: 0 2px !important;
+          margin: 0 !important;
+          border-collapse: collapse !important;
+          vertical-align: middle !important;
+          white-space: nowrap;
+        }
+
+        /* Инпуты и селекты внутри ячеек при редактировании */
+        .main-table tbody td input,
+        .main-table tbody td select {
+          font-size: 12px !important;
+          height: 22px !important;           /* поле выше самой ячейки */
+          line-height: 1.2 !important;
+          padding: 2px 6px !important;
+          margin: 0 !important;
+          box-sizing: border-box !important;
+        }
+        /* 🔽 Заголовки таблицы чуть меньше шрифтом */
+        .main-table th,
+        .sticky-header .header-cell {
+            font-size: 88% !important;   /* было 90% */
+            font-weight: bold;           /* делаем жирным */
+        }
+        /* Центрируем только иконки в столбце Действия */
+        .action-cell button img {
+            display: inline-block;
+            vertical-align: middle; /* выравнивание по центру строки */
+            margin-top: -2px;       /* если иконка все равно выше — подкорректировать вручную */
+        }
+        /* 🔹 Мягкая подсветка обязательных полей */
+        input[required],
+        select[required] {
+            border: 1px solid #ffb347 !important;  /* тонкая оранжевая рамка */
+            background-color: #fff8f0;             /* чуть теплый фон */
+        }
+
+        /* При фокусе — чуть ярче, чтобы пользователь видел */
+        input[required]:focus,
+        select[required]:focus {
+            border-color: #ff8000 !important;
+            background-color: #fff4e6;
+            outline: none;
+        }
+        /* 🔹 Подсветка обязательных полей по маркетплейсу */
+        {% if selected_table == 'yandex' %}
+          input[required],
+          select[required] {
+            border: 1px solid #FFD633 !important;
+            background-color: #FFFBEA;
+          }
+          input[required]:focus,
+          select[required]:focus {
+            border-color: #E6B800 !important;
+            background-color: #FFF5CC;
+          }
+        {% elif selected_table == 'ozon' %}
+          input[required],
+          select[required] {
+            border: 1px solid #005BFF !important;
+            background-color: #F0F6FF;
+          }
+          input[required]:focus,
+          select[required]:focus {
+            border-color: #0041B3 !important;
+            background-color: #E0EDFF;
+          }
+        {% elif selected_table == 'wildberries' %}
+          input[required],
+          select[required] {
+            border: 1px solid #9B30FF !important;
+            background-color: #FAF0FF;
+          }
+          input[required]:focus,
+          select[required]:focus {
+            border-color: #6A00CC !important;
+            background-color: #F0E0FF;
+          }
+        {% endif %}
+        .price-cell {
+          display: inline-flex;
+          justify-content: flex-end;
+          min-width: 70px; /* подстрой ширину под свои числа */
+        }
+        .price-value {
+          text-align: right;
+          min-width: 55px;
+          font-variant-numeric: tabular-nums;
+        }
+        .price-symbol {
+          margin-left: 2px;
+        }
+        .copy-tooltip {
+          position: fixed;
+          background: #333;
+          color: #fff;
+          font-size: 12px;
+          padding: 2px 6px;
+          border-radius: 4px;
+          pointer-events: none;
+          opacity: 0;
+          transition: opacity 0.2s ease;
+          z-index: 9999;
+        }
+        /* === FULLSCREEN OVERLAY для переключений === */
+        #screen-overlay[hidden] { display: none !important; }
+
+        #screen-overlay {
+          position: fixed;
+          inset: 0;
+          z-index: 99999;
+          background: rgba(0,0,0,0.45);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          backdrop-filter: blur(1px);
+        }
+
+        .overlay-box {
+          min-width: 360px;
+          max-width: 90vw;
+          background: #fff;
+          border-radius: 12px;
+          box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+          padding: 18px 20px;
+          text-align: center;
+          font-family: 'Inter', sans-serif;
+        }
+
+        .overlay-title {
+          font-size: 16px;
+          font-weight: 600;
+          margin: 0 0 8px 0;
+          color: #333;
+        }
+
+        .overlay-note {
+          font-size: 13px;
+          color: #666;
+          margin-bottom: 14px;
+        }
+
+        /* Прогресс-бар (индетерминированный) */
+        .progress {
+          position: relative;
+          width: 100%;
+          height: 8px;
+          background: #eee;
+          border-radius: 6px;
+          overflow: hidden;
+        }
+        .progress-bar {
+          position: absolute;
+          left: -40%;
+          top: 0;
+          height: 100%;
+          width: 40%;
+          background: linear-gradient(90deg, #3b82f6 0%, #60a5fa 100%);
+          border-radius: 6px;
+          animation: indeterminate 1.2s infinite;
+        }
+        @keyframes indeterminate {
+          0%   { left: -40%; width: 40%; }
+          50%  { left: 20%;  width: 60%; }
+          100% { left: 100%; width: 40%; }
+        }
+
 
     </style>
 </head>
-<body>
+<body class="compact">
+<div id="copy-tooltip" class="copy-tooltip"></div>
 <div class="wrapper">
-    <div class="top-panel" style="display: flex; justify-content: flex-start; align-items: flex-start; width: 100%; flex-wrap: wrap; gap: 12px; margin-bottom: 0px;">
+    <div class="top-panel" style="display: flex; justify-content: space-between; align-items: flex-start; width: 100%; flex-wrap: nowrap; gap: 12px; margin-bottom: 0px;">
       <div style="display: flex; align-items: flex-start; gap: 12px;">
           <!-- Левая часть: информация о складе и блок поиска -->
           <div style="display: flex; flex-direction: column; gap: 12px; align-items: flex-start;">
@@ -871,15 +1155,12 @@
                         style="display: flex; align-items: center; gap: 10px;">
                     <div style="position: relative;">
                       <input type="search" id="custom-search" name="search"
-                             placeholder="Поиск: Арт_MC, Поставщик, Модель"
-                             value="{{ request.args.get('search', '') }}"
-                             style="font-size: 15px; padding: 6px 32px 6px 12px; border-radius: 6px;
-                                    width: 300px; box-sizing: border-box; border: 1px solid #ccc;"
-                             onsearch="this.value=''; this.form.submit();">
-                      <span id="clear-search"
-                            style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
-                                   cursor: pointer; font-size: 16px; color: #aaa; display: none;">&times;</span>
-                    </div>
+                       placeholder="Поиск:"
+                       value="{{ request.args.get('search', '') }}"
+                       style="font-size: 15px; padding: 6px 12px; border-radius: 6px;
+                              width: 300px; box-sizing: border-box; border: 1px solid #ccc;">
+                                    </div>
+
                     <button type="submit"
                             style="display: flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 15px;
                                    border-radius: 6px; border: 1px solid #ccc; background-color: #f0f0f0;
@@ -961,7 +1242,7 @@
             {% set ym = c.get('yandex', {}) %}
             {% set oz = c.get('ozon', {}) %}
             {% set wb = c.get('wildberries', {}) %}
-  
+
             <label style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
               <span style="display:flex; flex-direction:column; min-width: 220px;">
                 <span>{{ supplier }}</span>
@@ -971,7 +1252,7 @@
                   WB: {{ wb.get('total', 0) }} (акт: {{ wb.get('active', 0) }})
                 </span>
               </span>
-  
+
               <label class="toggle-switch">
                 <input type="checkbox"
                        class="supplier-toggle"
@@ -990,7 +1271,18 @@
               <div class="sticky-header header-{{ selected_table }}">
                 {% for col in table_data.columns %}
                   <div class="header-cell {% if col.strip() == 'Модель' %}text-left{% else %}text-center{% endif %}">
-                    <a href="{{ url_for('show_table', table_name=selected_table, search=request.args.get('search', ''), letter=request.args.get('letter', ''), sort=col, order='desc' if sort_column == col and sort_order == 'asc' else 'asc') }}">
+                    <a href="{{ url_for(
+                        'show_table',
+                        table_name=selected_table,
+                        search=request.args.get('search', ''),
+                        letter=request.args.get('letter', ''),
+                        sort=col,
+                        order=(
+                            'asc' if sort_column == col and sort_order == 'desc'
+                            else 'desc' if sort_column == col
+                            else ('desc' if col == 'Нал' else 'asc')
+                        )
+                    ) }}">
                       {{ 'Изменено' if col == 'Дата изменения' else col }}
                     </a>
                   </div>
@@ -1028,33 +1320,90 @@
                 </script>
 
                 <form method="POST" action="/add/{{ selected_table }}" style="display: contents;">
+                    <script>
+                      (function () {
+                        // Находим форму добавления, это та, у которой action начинается с /add/
+                        const addForm = document.querySelector('form[action^="/add/"]');
+                        if (!addForm) return;
+
+                        addForm.addEventListener('submit', function (e) {
+                          try {
+                            const formData = new FormData(addForm);
+
+                            // Базовые обязательные поля. Отредактируй список под свою логику, если нужно.
+                            const requiredFields = ['Sklad', 'Модель', 'Нал', 'Опт', '%'];
+
+                            // Группа полей поставщиков — требуем, чтобы было заполнено хотя бы одно из них
+
+
+                            let missing = [];
+
+                            // Проверка базовых обязательных
+                            requiredFields.forEach(field => {
+                              const val = (formData.get(field) || '').trim();
+                              if (!val) missing.push(field);
+                            });
+
+                            // Проверка «хотя бы один поставщик»
+                            const hasAnySupplier = supplierFields.some(f => ((formData.get(f) || '').trim().length > 0));
+                            if (!hasAnySupplier) {
+                              missing.push('Invask/Okno/United (минимум одно поле)');
+                            }
+
+                            if (missing.length > 0) {
+                              e.preventDefault();
+                              alert('Заполните обязательные поля:\n• ' + missing.join('\n• '));
+                              return false;
+                            }
+
+                            // Если артикулы у поставщиков должны быть строго числовые — раскомментируй блок ниже
+                            /*
+                            supplierFields.forEach(f => {
+                              const v = (formData.get(f) || '').trim();
+                              if (v && !/^\d+$/.test(v)) {
+                                e.preventDefault();
+                                alert('Поле ' + f + ' должно содержать только цифры.');
+                                throw new Error('Validation failed: ' + f);
+                              }
+                            });
+                            */
+                          } catch (err) {
+                            // Мягко гасим любые JS-ошибки, чтобы не ломать страницу
+                            console.warn('[validate add form]', err);
+                          }
+                        });
+                      })();
+                    </script>
+
                   {% for col in table_data.columns %}
-                    <div class="input-cell {% if col.strip() == 'Модель' %}text-left{% else %}text-center{% endif %}">
-                      {% if col.strip() not in ['№', 'Дата изменения'] %}
-                        {% if col.strip() == 'Поставщик' %}
-                          <select name="Поставщик">
+                      <div class="input-cell {% if col.strip() == 'Модель' %}text-left{% else %}text-center{% endif %}">
+                        {% if col.strip() not in ['№', 'Дата изменения', 'Цена'] %}
+                          {% if col.strip() == 'Нал' %}
+                            <!-- Поле "Нал" скрыто, всегда = 0 -->
+                            <input type="hidden" name="Нал" value="0">
+                          {% elif col.strip() == 'Статус' %}
+                            <select name="Статус">
                               <option value=""></option>
-                              <option value="Sklad"  {% if saved_form_data.get('Поставщик') == 'Sklad' %}selected{% endif %}>Sklad</option>
-                              <option value="United" {% if saved_form_data.get('Поставщик') == 'United' %}selected{% endif %}>United</option>
-                              <option value="Invask" {% if saved_form_data.get('Поставщик') == 'Invask' %}selected{% endif %}>Invask</option>
-                              <option value="Okno"   {% if saved_form_data.get('Поставщик') == 'Okno' %}selected{% endif %}>Okno</option>
+                              <option value="выкл.">выкл.</option>
                             </select>
-                        {% elif col.strip() == 'Статус' %}
-                          <select name="Статус">
-                            <option value=""></option>
-                            <option value="выкл.">выкл.</option>
-                          </select>
-                        {% else %}
-                          <input type="text" name="{{ col }}" value="{{ saved_form_data.get(col, '') }}"
-                                 {% if col in ['Нал', 'Опт', 'Наценка', 'Арт_MC', 'WB Barcode', 'WB Артикул'] %}
-                                   inputmode="numeric" pattern="\d*" maxlength="20"
-                                   oninput="this.value = this.value.replace(/\D/g, '')"
-                                 {% endif %}
-                          >
+                          {% else %}
+                            <input
+                                type="text"
+                                name="{{ col }}"
+                                value="{{ saved_form_data.get(col, '') }}"
+                                {% if col in ['Опт', '%', 'Sklad', 'WB Barcode', 'WB Артикул'] %}
+                                  inputmode="numeric" pattern="\d*" maxlength="20"
+                                  oninput="this.value = this.value.replace(/\D/g, '')"
+                                {% endif %}
+                                {% if col in ['Sklad', 'Модель', 'Опт', '%', 'WB Barcode', 'WB Артикул'] %}
+                                  required
+                                {% endif %}
+                            >
+                          {% endif %}
                         {% endif %}
-                      {% endif %}
-                    </div>
-                  {% endfor %}
+                      </div>
+                    {% endfor %}
+
                   <div class="input-cell text-center">
                     <button type="submit"
                             class="add-button add-button-{{ selected_table }}"
@@ -1071,29 +1420,32 @@
                   <tbody>
 
                   {% for row in table_data.values.tolist() %}
-                    <tr>
+                  <tr data-active-supplier="{{ active_suppliers[loop.index0] if active_suppliers else '' }}">
                       {% for col, item in zip(table_data.columns, row) %}
                         {% set value = item if item is not none else '' %}
-                        <td class="{% if col.strip() == 'Модель' %}text-left{% elif col.strip() == 'Комментарий' %}comment-cell{% else %}text-center{% endif %}{% if col.strip() in ['Поставщик', 'Артикул'] %} text-muted{% endif %}"
+                        <td class="{% if col.strip() == 'Модель' %}text-left{% elif col.strip() == 'Комментарий' %}comment-cell{% else %}text-center{% endif %}{% if col.strip() in ['Invask', 'Okno', 'United'] %} text-muted{% endif %}"
                             {% if col.strip() in ['Модель', 'Комментарий'] and value|length > 35 %}title="{{ value }}"{% endif %}>
                           {% if col.strip() in ['Опт', 'Цена'] %}
-                            {% if value is number %}
-                              {{ '{:,.0f} р.'.format(value).replace(',', ' ') }}
-                            {% else %}
-                              {{ value }}
-                            {% endif %}
-                          {% elif col.strip() == 'Наценка' %}
-                            {{ value }} %
+                          {% if value is number %}
+                            <span class="price-cell">
+                              <span class="price-value">{{ '{:,.0f}'.format(value).replace(',', ' ') }}</span>
+                              <span class="price-symbol">р.</span>
+                            </span>
                           {% else %}
                             {{ value }}
                           {% endif %}
+                        {% elif col.strip() == '%' %}
+                          {{ value }} %
+                        {% else %}
+                          {{ value }}
+                        {% endif %}
                         </td>
                       {% endfor %}
                       <td class="text-center action-cell">
                         <button type="button" class="edit-btn" style="border:none; background:none; cursor:pointer;">
                           <img src="{{ url_for('static', filename='icons/file-edit.svg') }}" alt="Редактировать" width="18">
                         </button>
-                        <form method="post" action="/delete/{{ selected_table }}/{{ row[table_data.columns.get_loc('Артикул')] }}" class="delete-form" style="display:inline;">
+                        <form method="post" action="/delete/{{ selected_table }}/{{ row[table_data.columns.get_loc('Sklad')] }}" class="delete-form" style="display:inline;">
                           <input type="hidden" name="item_name" value="{{ row[table_data.columns.get_loc('Модель')] }}">
                           <button type="button" class="delete-btn" style="border:none; background:none; cursor:pointer;">
                             <img src="{{ url_for('static', filename='icons/trash.svg') }}" alt="Удалить" width="18">
@@ -1104,11 +1456,47 @@
                   {% endfor %}
                   </tbody>
                 </table>
+                  <script>
+                    (function() {
+                      // 1) Список имён колонок из DataFrame → узнаём индексы по названиям
+                      const headers = {{ table_data.columns.tolist() | tojson }};
+                      const idx = {};
+                      headers.forEach((h, i) => idx[h] = i);
+
+                      // 2) Только эти четыре поставщика подсвечиваем
+                      const supplierCols = ['Sklad', 'Invask', 'Okno', 'United'];
+
+                      // 3) Для каждой строки подсветим ячейку активного поставщика
+                      document.querySelectorAll('.main-table tbody tr').forEach(tr => {
+                        const sup = (tr.getAttribute('data-active-supplier') || '').trim();
+                        if (!supplierCols.includes(sup)) return;
+
+                        const colIdx = idx[sup];
+                        if (typeof colIdx !== 'number') return;
+
+                        const td = tr.children[colIdx];
+                        if (!td) return;
+
+                        td.classList.add('supplier-active'); // мягкая подсветка
+                        if (!td.title) td.title = `Актуальный поставщик: ${sup}`; // необязательная подсказка
+                      });
+                    })();
+                    </script>
               </div>
             </div>
             
         {% endif %}
 </div>
+    <!-- === FULLSCREEN OVERLAY === -->
+    <div id="screen-overlay" hidden>
+      <div class="overlay-box" role="alert" aria-live="assertive" aria-busy="true">
+        <div class="overlay-title" id="overlay-title">Выполняется операция…</div>
+        <div class="overlay-note" id="overlay-note">Пожалуйста, подождите. Элементы интерфейса временно недоступны.</div>
+        <div class="progress" aria-hidden="true">
+          <div class="progress-bar"></div>
+        </div>
+      </div>
+    </div>
     <script src="{{ url_for('static', filename='js/sweetalert2.all.min.js') }}"></script>
     <script>
     // Синхронизация размеров Grid с реальной таблицей
@@ -1204,9 +1592,11 @@
         let defaultWidths, defaultTotalWidth;
         
         if (selectedTable === 'wildberries') {
-            // Специальные размеры для Wildberries
-            defaultWidths = '30px 100px 140px 100px 85px 80px 270px 60px 40px 90px 70px 100px 140px 80px';
-            defaultTotalWidth = '1385px'; // Примерная общая ширина
+            // Специальные размеры для Wildberries (№ + 14 данных; без «Действия»)
+            defaultWidths =
+                '23px 70px 105px 80px 75px 105px 80px 253px 50px 30px 68px 58px 68px 126px 111px';
+            // Сумма ~ 1102px; можно округлить
+            defaultTotalWidth = '1105px';
         } else {
             // Стандартные размеры для Yandex и Ozon
             defaultWidths = '30px 80px 90px 80px 250px 70px 60px 90px 70px 100px 180px 80px';
@@ -1287,14 +1677,14 @@
             const table = "{{ selected_table }}";
             const headers = {{ table_data.columns.tolist() | tojson }};
             const cells = row.querySelectorAll('td');
-            const indexOfArtMC = headers.indexOf("Арт_MC");
+            const indexOfArtMC = headers.indexOf("Sklad");
             const itemId = cells[indexOfArtMC].innerText.trim();
 
 
-            const numericFields = ['Опт', 'Цена', 'Наценка', 'Нал'];
+            const numericFields = ['Опт', 'Цена', '%', 'Нал'];
             const recalcPrices = () => {
                 const optInput = row.querySelector('input[name="Опт"]');
-                const markupInput = row.querySelector('input[name="Наценка"]');
+                const markupInput = row.querySelector('input[name="%"]');
 
                 const opt = parseFloat(optInput?.value.replace(/\s/g, ''));
                 const markup = parseFloat(markupInput?.value.replace(/\s/g, ''));
@@ -1322,7 +1712,7 @@
                 }
                 const val = td.innerText.trim();
 
-                const skipInputFields = ['№', 'Цена', 'Дата изменения'];
+                const skipInputFields = ['№', 'Sklad', 'Цена', 'Дата изменения'];
 
                 if (!headers[i] || skipInputFields.includes(headers[i])) {
                     if (headers[i] === 'Цена') {
@@ -1387,7 +1777,7 @@
                         input.addEventListener('drop', function (e) {
                             e.preventDefault();
                         });
-                        if (['Опт', 'Наценка'].includes(headers[i])) {
+                        if (['Опт', '%'].includes(headers[i])) {
                             input.addEventListener('input', recalcPrices);
                         }
                     }
@@ -1421,7 +1811,7 @@
             form.action = `/update/${table}/${itemId}`;
             const hiddenId = document.createElement('input');
             hiddenId.type = 'hidden';
-            hiddenId.name = 'Арт_MC';
+            hiddenId.name = 'Sklad';
             hiddenId.value = itemId;
             form.appendChild(hiddenId);
             form.style.display = 'inline';
@@ -1481,7 +1871,7 @@
                     return;
                 }
 
-                // 🧠 Сохраняем scrollY и Арт_MC
+                // 🧠 Сохраняем scrollY и Sklad
                 localStorage.setItem("highlight_art", itemId);
                 fetch(form.action, {
                     method: 'POST',
@@ -1546,7 +1936,7 @@
             const tryScrollToRow = () => {
                 const rows = document.querySelectorAll("tbody tr");
                 const headers = {{ table_data.columns.tolist() | tojson }};
-                const artIndex = headers.indexOf("Арт_MC");
+                const artIndex = headers.indexOf("Sklad");
 
                 for (const row of rows) {
                     const cells = row.querySelectorAll("td");
@@ -1576,7 +1966,7 @@
         if (highlightId) {
             const rows2 = document.querySelectorAll("tbody tr");
             const headers2 = {{ table_data.columns.tolist() | tojson }};
-            const artIndex2 = headers2.indexOf("Арт_MC");
+            const artIndex2 = headers2.indexOf("Sklad");
 
             rows2.forEach(row => {
                 const cells = row.querySelectorAll("td");
@@ -1597,7 +1987,13 @@
         const addForm = document.querySelector('form[action^="/add"]');
         if (!addForm) return;
 
-        const requiredFields = ['Арт_MC', 'Поставщик', 'Артикул', 'Модель', 'Нал', 'Опт', 'Наценка'];
+        // ✅ Обязательные поля
+        const requiredFields = ['Sklad', 'Модель', 'Нал', 'Опт', '%'];
+
+        // Для Wildberries — оба поля обязательны
+        if ("{{ selected_table }}" === "wildberries") {
+            requiredFields.push('WB Barcode', 'WB Артикул');
+        }
 
         addForm.addEventListener("submit", function (e) {
             const formData = new FormData(addForm);
@@ -1605,46 +2001,38 @@
             let missingFields = [];
             let invalidNumericFields = [];
 
+            // Проверка обязательных полей
             requiredFields.forEach(field => {
-                const value = formData.get(field)?.trim();
+                const value = (formData.get(field) || "").trim();
                 if (!value) {
                     hasError = true;
                     missingFields.push(field);
-                } else if (['Нал', 'Опт', 'Наценка', 'Арт_MC', 'WB Barcode', 'WB Артикул'].includes(field) && !/^\d+$/.test(value)) {
-                    hasError = true;
-                    invalidNumericFields.push(field);
+                } else {
+                    // Проверка, если это числовое поле
+                    if (['Нал', 'Опт', '%', 'WB Barcode', 'WB Артикул', 'Sklad'].includes(field)) {
+                        if (!/^\d+$/.test(value)) {
+                            hasError = true;
+                            invalidNumericFields.push(field);
+                        }
+                    }
                 }
             });
 
             if (hasError) {
                 e.preventDefault();
-                let msg = '';
+                let msg = "";
                 if (missingFields.length > 0) {
-                    msg += `Не заполнены поля: ${missingFields.join(', ')}.\n`;
+                    msg += "Заполните поля:\n• " + missingFields.join("\n• ") + "\n";
                 }
                 if (invalidNumericFields.length > 0) {
-                    msg += `Поля ${invalidNumericFields.join(', ')} должны содержать только цифры.`;
+                    msg += "В полях " + invalidNumericFields.join(", ") + " должны быть только цифры.";
                 }
-
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Ошибка при добавлении товара',
-                    text: msg,
-                });
-            }
-        });
-
-        // Блокируем буквы в числовых полях
-        ['Нал', 'Опт', 'Наценка', 'Арт_MC', 'WB Barcode', 'WB Артикул'].forEach(field => {
-            const input = addForm.querySelector(`input[name="${field}"]`);
-            if (input) {
-                input.addEventListener("input", function () {
-                    this.value = this.value.replace(/\D/g, '');
-                });
+                alert(msg);
             }
         });
     });
     </script>
+
 
     <script>
     document.getElementById('manual-update-btn')?.addEventListener('click', function () {
@@ -1678,20 +2066,7 @@
         });
     });
     </script>
-    <script>
-    document.querySelectorAll('.global-toggle').forEach(input => {
-        input.addEventListener('change', function () {
-            const market = this.dataset.market;
-            fetch(`/toggle_stock/${market}`, {
-                method: 'POST'
-            }).then(() => {
-                location.reload();
-            }).catch(() => {
-                alert("❌ Ошибка переключения склада");
-            });
-        });
-    });
-    </script>
+
     <script>
     document.addEventListener("DOMContentLoaded", function () {
         const clickRows = document.querySelectorAll("tbody tr");
@@ -1702,7 +2077,7 @@
         if (selectedTable === "wildberries") color = "#efc1ed";
 
         const clickHeaders = {{ table_data.columns.tolist() | tojson }};
-        const clickArtIndex = clickHeaders.indexOf("Арт_MC");
+        const clickArtIndex = clickHeaders.indexOf("Sklad");
 
         clickRows.forEach(row => {
             row.addEventListener("click", function () {
@@ -1744,7 +2119,7 @@
             Swal.fire({
                 icon: 'error',
                 title: 'Ошибка добавления',
-                text: 'Товар с таким Арт_MC, Артикул, Модель, WB Barcode или WB Артикул уже существует.'
+                text: 'Товар с таким Sklad, Артикул, Модель, WB Barcode или WB Артикул уже существует.'
             }).then(() => {
                 // удаляем параметр duplicate из URL
                 const url = new URL(window.location.href);
@@ -1874,22 +2249,6 @@ function showCustomAlert(message, isError = false) {
 </script>
 
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-    document.querySelectorAll('.supplier-toggle').forEach(input => {
-        input.addEventListener('change', function () {
-            const supplier = this.dataset.supplier;
-            fetch(`/toggle_supplier/${supplier}`, {
-                method: 'POST'
-            }).then(() => {
-                location.reload();
-            }).catch(() => {
-                alert("❌ Ошибка переключения поставщика");
-            });
-        });
-    });
-});
-</script>
-<script>
 document.addEventListener("DOMContentLoaded", function () {
     // При изменении строки поиска — сохраняем
     const searchInput = document.getElementById("custom-search");
@@ -1956,6 +2315,285 @@ document.addEventListener("DOMContentLoaded", function () {
     } else {
         console.log('[highlight] Сессия продолжается — выделение сохраняем');
     }
+})();
+</script>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const searchInput = document.getElementById("custom-search");
+    const clearBtn = document.getElementById("clear-search");
+
+    function toggleClear() {
+        clearBtn.style.display = searchInput.value ? "block" : "none";
+    }
+
+    searchInput.addEventListener("input", toggleClear);
+    clearBtn.addEventListener("click", function () {
+        searchInput.value = "";
+        searchInput.form.submit();
+    });
+
+    toggleClear();
+});
+</script>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  const searchInput = document.getElementById("custom-search");
+
+  // событие "search" срабатывает при клике на встроенный крестик
+  searchInput.addEventListener("search", function() {
+    if (!searchInput.value) {
+      // очищаем параметр search и перегружаем страницу
+      const url = new URL(window.location.href);
+      url.searchParams.delete("search");
+      window.location.href = url.toString();
+    }
+  });
+});
+</script>
+
+<script>
+(function(){
+  // ——— ссылки на DOM ———
+  const $overlay = document.getElementById('screen-overlay');
+  const $title   = document.getElementById('overlay-title');
+  const $note    = document.getElementById('overlay-note');
+
+  let BUSY = false;   // простая защита от повторных кликов
+
+  function showOverlay(title, note){
+    if (title) $title.textContent = title;
+    if (note)  $note.textContent  = note;
+    $overlay.removeAttribute('hidden');
+    document.body.style.cursor = 'progress';
+  }
+  function hideOverlay(){
+    $overlay.setAttribute('hidden','');
+    document.body.style.cursor = '';
+  }
+
+  // Человечные подписи
+  const MP_LABELS = { yandex: 'Yandex', ozon: 'Ozon', wildberries: 'Wildberries' };
+
+  // Унифицированный fetch JSON
+  async function postJSON(url){
+    const res = await fetch(url, { method: 'POST', headers: { 'X-Requested-With':'XMLHttpRequest' } });
+    // даже при 204 попробуем не падать
+    let data = null;
+    try { data = await res.json(); } catch(e){ data = null; }
+    if (!res.ok || !data || data.status !== 'ok'){
+      const msg = (data && data.message) ? data.message : `HTTP ${res.status}`;
+      throw new Error(msg);
+    }
+    return data;
+  }
+
+  // ——— основной обработчик ———
+  async function handleToggle(input){
+    if (BUSY) { input.checked = !input.checked; return; } // отменяем повтор
+    BUSY = true;
+    // отключим тумблеры, чтобы не «дребезжали»
+    document.querySelectorAll('.global-toggle, .supplier-toggle').forEach(el => el.disabled = true);
+
+    const isMarketToggle   = input.classList.contains('global-toggle');
+    const isSupplierToggle = input.classList.contains('supplier-toggle');
+
+    try {
+      if (isMarketToggle){
+        const market = (input.dataset.market || '').toLowerCase();
+        const label  = MP_LABELS[market] || market;
+        const mode   = input.checked ? 'Включение' : 'Отключение';
+        showOverlay(`${mode} маркетплейса: ${label}`, 'Идёт применение настроек…');
+        const data = await postJSON(`/toggle_stock/${encodeURIComponent(market)}`);
+        // фиксируем состояние фактом с сервера
+        input.checked = !!data.enabled;
+
+      } else if (isSupplierToggle){
+        const supplier = (input.dataset.supplier || '').trim();
+        const mode     = input.checked ? 'Включение' : 'Отключение';
+        showOverlay(`${mode} поставщика: ${supplier}`, 'Идёт обновление остатков…');
+        const data = await postJSON(`/toggle_supplier/${encodeURIComponent(supplier)}`);
+        input.checked = !!data.enabled;
+      }
+
+    } catch(err){
+      // откатить флажок, показать ошибку
+      input.checked = !input.checked;
+      Swal.fire('Ошибка переключения', String(err.message || err), 'error');
+
+    } finally {
+      hideOverlay();
+      BUSY = false;
+      document.querySelectorAll('.global-toggle, .supplier-toggle').forEach(el => el.disabled = false);
+      // обновить таблицу и шапки
+      location.reload();
+    }
+  }
+
+  // ——— перехватчик раньше всех (capture: true), гасит старые слушатели ———
+  document.addEventListener('change', function(e){
+    const t = e.target;
+    if (!t) return;
+    if (t.matches('.global-toggle, .supplier-toggle')){
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      handleToggle(t);
+    }
+  }, true); // ⬅ capture:true
+
+  // ——— блокируем любую навигацию, пока BUSY (клики по вкладкам/алфавиту/ссылкам) ———
+  document.addEventListener('click', function(e){
+    if (!BUSY) return;
+    const a = e.target.closest('a');
+    if (a){
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+    }
+  }, true);
+})();
+</script>
+
+<script>
+(function() {
+  const supplierCols = ['Sklad', 'Invask', 'Okno', 'United'];
+  const headers = {{ table_data.columns.tolist() | tojson }};
+  const idx = {};
+  headers.forEach((h, i) => idx[h] = i);
+
+  // Вешаем обработчик клика по ячейкам поставщиков
+  document.querySelectorAll('.main-table tbody tr').forEach(tr => {
+    supplierCols.forEach(col => {
+      const colIdx = idx[col];
+      if (typeof colIdx !== 'number') return;
+      const td = tr.children[colIdx];
+      if (!td) return;
+
+      td.style.cursor = 'pointer'; // курсор "рука"
+
+      td.addEventListener('click', (e) => {
+        const val = td.innerText.trim();
+        if (val) {
+          navigator.clipboard.writeText(val).then(() => {
+            // показать всплывашку около курсора
+            const tooltip = document.getElementById('copy-tooltip');
+            tooltip.textContent = `скопировано: ${val}`;
+            tooltip.style.left = (e.clientX + 10) + 'px';
+            tooltip.style.top = (e.clientY + 10) + 'px';
+            tooltip.style.opacity = '1';
+
+            // скрыть через 1 секунду
+            setTimeout(() => {
+              tooltip.style.opacity = '0';
+            }, 1000);
+          }).catch(err => {
+            console.error('Ошибка копирования:', err);
+          });
+        }
+      });
+    });
+  });
+})();
+</script>
+<script>
+(function(){
+  // ——— ссылки на DOM ———
+  const $overlay = document.getElementById('screen-overlay');
+  const $title   = document.getElementById('overlay-title');
+  const $note    = document.getElementById('overlay-note');
+
+  let BUSY = false;   // простая защита от повторных кликов
+
+  function showOverlay(title, note){
+    if (title) $title.textContent = title;
+    if (note)  $note.textContent  = note;
+    $overlay.removeAttribute('hidden');
+  }
+  function hideOverlay(){
+    $overlay.setAttribute('hidden','');
+  }
+
+  // Человечные подписи
+  const MP_LABELS = { yandex: 'Yandex', ozon: 'Ozon', wildberries: 'Wildberries' };
+
+  // Унифицированный fetch JSON
+  async function postJSON(url){
+    const res = await fetch(url, { method: 'POST', headers: { 'X-Requested-With':'XMLHttpRequest' } });
+    // даже при 204 попытаемся не падать
+    let data = null;
+    try { data = await res.json(); } catch(e){ data = null; }
+    if (!res.ok || !data || (data.status && data.status !== 'ok')){
+      const msg = (data && data.message) ? data.message : `HTTP ${res.status}`;
+      throw new Error(msg);
+    }
+    return data;
+  }
+
+  // ——— основной обработчик ———
+  async function handleToggle(input){
+    if (BUSY) { input.checked = !input.checked; return; } // отменяем повтор
+    BUSY = true;
+
+    // Определяем цель: маркетплейс или поставщик
+    const isMarketToggle   = input.classList.contains('global-toggle');
+    const isSupplierToggle = input.classList.contains('supplier-toggle');
+
+    // Показываем оверлей с понятным текстом
+    if (isMarketToggle){
+      const market = (input.dataset.market || '').toLowerCase();
+      const label  = MP_LABELS[market] || market;
+      const mode   = input.checked ? 'Включение' : 'Отключение';
+      showOverlay(`${mode} маркетплейса: ${label}`, 'Идёт применение настроек…');
+      try {
+        const data = await postJSON(`/toggle_stock/${encodeURIComponent(market)}`);
+        // фиксируем состояние фактом с сервера
+        input.checked = !!data.enabled;
+      } catch(err){
+        // откатить флажок, показать ошибку
+        input.checked = !input.checked;
+        Swal.fire('Ошибка переключения', String(err.message || err), 'error');
+      } finally {
+        hideOverlay();
+        BUSY = false;
+        // обновить таблицу и шапки
+        location.reload();
+      }
+      return;
+    }
+
+    if (isSupplierToggle){
+      const supplier = (input.dataset.supplier || '').trim();
+      const mode     = input.checked ? 'Включение' : 'Отключение';
+      showOverlay(`${mode} поставщика: ${supplier}`, 'Идёт обновление остатков…');
+      try {
+        const data = await postJSON(`/toggle_supplier/${encodeURIComponent(supplier)}`);
+        input.checked = !!data.enabled;
+      } catch(err){
+        input.checked = !input.checked;
+        Swal.fire('Ошибка переключения', String(err.message || err), 'error');
+      } finally {
+        hideOverlay();
+        BUSY = false;
+        location.reload();
+      }
+      return;
+    }
+  }
+
+  // ——— навешиваем перехватчик раньше всех (capture: true), чтобы не конфликтовать со старым кодом ———
+  document.addEventListener('change', function(e){
+    const t = e.target;
+    if (!t) return;
+    if (t.matches('.global-toggle, .supplier-toggle')){
+      // перехватываем и гасим дальнейшую обработку старыми слушателями
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      // запускаем наш контроллер
+      handleToggle(t);
+    }
+  }, true); // ⬅ capture:true
 })();
 </script>
 

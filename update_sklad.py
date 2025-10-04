@@ -58,14 +58,129 @@ def gen_sklad():
     # Преобразуем в DataFrame и оставляем нужные столбцы
     columns = data[0]
     sklad = pd.DataFrame(filtered_data, columns=columns)
-    sklad = sklad[["Арт мой", "Модель", "Наличие", "ОПТ"]]
 
-    # Очистка и преобразование числовых столбцов
-    sklad["Наличие"] = sklad["Наличие"].replace(r"[^\d]", "", regex=True).astype(int)
-    sklad["ОПТ"] = sklad["ОПТ"].replace(r"[^\d]", "", regex=True).astype(int)
+    # Универсальный подбор названий колонок
+    def _pick_col(df, variants):
+        cols = list(df.columns)
+        low = {c.strip().lower(): c for c in cols}
+        for v in variants:
+            key = v.strip().lower()
+            if key in low:
+                return low[key]
+            for c in cols:
+                if c.strip().lower().replace("₽", "").replace("$", "") == key:
+                    return c
+        return None
+
+    col_art = _pick_col(sklad, ["Арт мой", "Артикул", "Арт"])
+    col_model = _pick_col(sklad, ["Модель", "Наименование", "Название"])
+    col_nal = _pick_col(sklad, ["Наличие", "Остаток", "Остатки"])
+    col_opt = _pick_col(sklad, ["ОПТ", "ОПТ$", "ОПТ ₽", "Опт", "OPT"])
+    col_rrc = _pick_col(sklad, ["РРЦ", "РРЦ$", "РРЦ ₽", "RRC", "Розница"])
+
+    missing = [n for n, c in {
+        "Арт мой": col_art, "Модель": col_model, "Наличие": col_nal, "ОПТ": col_opt
+    }.items() if c is None]
+    if missing:
+        raise KeyError(f"Не найдены обязательные колонки в Google Sheets: {', '.join(missing)}")
+
+    # выбираем только реально существующие
+    base_cols = [col_art, col_model, col_nal, col_opt]
+    select_cols = base_cols + ([col_rrc] if col_rrc else [])
+    sklad = sklad[select_cols].rename(columns={
+        col_art: "Арт мой",
+        col_model: "Модель",
+        col_nal: "Наличие",
+        col_opt: "ОПТ",
+        **({col_rrc: "РРЦ"} if col_rrc else {})
+    })
+
+    # если РРЦ не нашлось — создаём с нулями
+    if "РРЦ" not in sklad.columns:
+        sklad["РРЦ"] = 0
+
+    # чистим числа
+    for num_col in ("Наличие", "ОПТ", "РРЦ"):
+        sklad[num_col] = (
+            sklad[num_col]
+            .astype(str)
+            .str.replace(r"[^\d\-]", "", regex=True)
+            .replace({"": "0", "-": "0"})
+            .astype(int)
+        )
 
     logger.success("📦 Складовые данные подготовлены")
     return sklad
+
+
+def upsert_ymwb_prices_from_sklad(sklad_df):
+    db_path = "System/!YMWB.db"
+    conn = sqlite3.connect(db_path, timeout=10)
+    cur = conn.cursor()
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS "prices" (
+            "Поставщик"    TEXT,
+            "Артикул"      TEXT,
+            "Наименование" TEXT,
+            "Наличие"      INTEGER,
+            "ОПТ"          INTEGER,
+            "РРЦ"          INTEGER
+        )
+    """)
+    cur.execute('PRAGMA table_info("prices")')
+    cols = {r[1] for r in cur.fetchall()}
+    if "Наименование" not in cols:
+        cur.execute('ALTER TABLE "prices" ADD COLUMN "Наименование" TEXT')
+    if "РРЦ" not in cols:
+        cur.execute('ALTER TABLE "prices" ADD COLUMN "РРЦ" INTEGER')
+
+    rows = 0
+    for _, r in sklad_df.iterrows():
+        art   = str(r.get("Арт мой", "")).strip()
+        model = str(r.get("Модель", "")).strip()
+        nal   = int(r.get("Наличие", 0) or 0)
+        opt   = int(r.get("ОПТ", 0) or 0)
+        rrc   = int(r.get("РРЦ", 0) or 0)
+        if not art:
+            continue
+
+        cur.execute("""
+            UPDATE "prices"
+               SET "Наличие" = ?, "ОПТ" = ?, "РРЦ" = ?,
+                   "Наименование" = COALESCE(?, "Наименование")
+             WHERE UPPER(TRIM("Поставщик")) = UPPER('Sklad')
+               AND TRIM(CAST("Артикул" AS TEXT)) = TRIM(?)
+        """, (nal, opt, rrc, model if model else None, art))
+        if cur.rowcount == 0:
+            cur.execute("""
+                INSERT INTO "prices"
+                    ("Поставщик","Артикул","Наименование","Наличие","ОПТ","РРЦ")
+                VALUES ('Sklad', ?, ?, ?, ?, ?)
+            """, (art, model, nal, opt, rrc))
+        rows += 1
+
+    # удаление отсутствующих
+    all_current_arts = {str(r.get("Арт мой", "")).strip()
+                        for _, r in sklad_df.iterrows()
+                        if str(r.get("Арт мой", "")).strip()}
+    if all_current_arts:
+        cur.execute("""
+            DELETE FROM "prices"
+             WHERE UPPER(TRIM("Поставщик")) = UPPER('Sklad')
+               AND TRIM(CAST("Артикул" AS TEXT)) NOT IN ({})
+        """.format(",".join("?" * len(all_current_arts))), tuple(all_current_arts))
+    else:
+        cur.execute("""
+            DELETE FROM "prices"
+             WHERE UPPER(TRIM("Поставщик")) = UPPER('Sklad')
+        """)
+    deleted = cur.rowcount
+
+    conn.commit()
+    conn.close()
+    logger.success(f"🧾 !YMWB.db → prices синхронизированы со складом, обновлено/добавлено: {rows}, удалено: {deleted}")
+
 
 
 def update_sklad_db(sklad_df):
@@ -95,14 +210,17 @@ def update_sklad_db(sklad_df):
 
     # Выгружаем товары Sklad из общей таблицы
     cursor.execute("""
-        SELECT rowid, Маркетплейс, Поставщик, Арт_MC, Статус, Модель, Нал, Опт, Наценка, Цена
+        SELECT rowid, Маркетплейс, Sklad, Статус, Модель, Нал, Опт, "%", Цена
         FROM marketplace
-        WHERE Поставщик = 'Sklad'
+        WHERE COALESCE(Invask,'')='' 
+          AND COALESCE(Okno,'')='' 
+          AND COALESCE(United,'')='' 
+          AND TRIM(COALESCE(Sklad,''))<>''
     """)
     rows = cursor.fetchall()
 
     for row in rows:
-        rowid, marketplace, supplier, art_mc, status, model, current_nal, current_opt, markup_raw, current_price = row
+        rowid, marketplace, art_mc, status, model, current_nal, current_opt, markup_raw, current_price = row
 
         table_flag = flags.get(marketplace.lower(), True)
         if not table_flag:

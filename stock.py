@@ -6,7 +6,7 @@
 1. gen_sklad():
     Извлекает актуальные остатки товаров из базы данных SQLite (`marketplace_base.db`) по каждой площадке:
     - Wildberries: по штрихкодам (`WB Barcode`)
-    - Yandex.Market: по артикулам (`Арт_MC`) с временной меткой
+    - Yandex.Market: по артикулам (`Sklad`) с временной меткой
     - Ozon: по артикулам с указанием склада
 
 2. wb_update(wb_data):
@@ -55,7 +55,7 @@ def gen_sklad():
 
     try:
         df = pd.read_sql_query("""
-            SELECT Маркетплейс, Арт_MC, `WB Barcode`, Нал
+            SELECT Маркетплейс, Sklad, `WB Barcode`, Нал
             FROM marketplace
             WHERE Нал IS NOT NULL
         """, conn)
@@ -76,18 +76,18 @@ def gen_sklad():
                 })
             elif mp == "yandex":
                 ym_final.append({
-                    "sku": str(row["Арт_MC"]).strip(),
+                    "sku": str(row["Sklad"]).strip(),
                     "items": [{"count": nal, "updatedAt": current_time}]
                 })
             elif mp == "ozon":
                 try:
-                    product_id = int(row["Арт_MC"])  # если не int — упадёт
+                    product_id = int(row["Sklad"])  # если не int — упадёт
                 except:
-                    logger.warning(f"⛔ Некорректный product_id для OZON: {row['Арт_MC']}")
+                    logger.warning(f"⛔ Некорректный product_id для OZON: {row['Sklad']}")
                     continue
 
                 oz_final.append({
-                    "offer_id": str(row["Арт_MC"]).strip(),
+                    "offer_id": str(row["Sklad"]).strip(),
                     "product_id": product_id,
                     "stock": nal,
                     "warehouse_id": warehouse_id

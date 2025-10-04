@@ -126,22 +126,18 @@
                 <thead>
                     <tr>
                         <th onclick="sortTable(0)">№</th>
-                        <th onclick="sortTable(1)">Арт_MC</th>
-                        <th onclick="sortTable(2)">Поставщик</th>
-                        <th onclick="sortTable(3)">Артикул</th>
-                        <th class="text-left" onclick="sortTable(4)">Модель</th>
-                        <th onclick="sortTable(5)">Yandex</th>
-                        <th onclick="sortTable(6)">Ozon</th>
-                        <th onclick="sortTable(7)">Wildberries</th>
+                        <th onclick="sortTable(1)">Sklad</th>
+                        <th class="text-left" onclick="sortTable(2)">Модель</th>
+                        <th onclick="sortTable(3)">Yandex</th>
+                        <th onclick="sortTable(4)">Ozon</th>
+                        <th onclick="sortTable(5)">Wildberries</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for row in stats_data %}
                     <tr>
                         <td>{{ loop.index }}</td>
-                        <td>{{ row['Арт_MC'] }}</td>
-                        <td>{{ row['Поставщик'] or '' }}</td>
-                        <td>{{ row['Артикул'] or '' }}</td>
+                        <td>{{ row['Sklad'] }}</td>
                         <td class="text-left">{{ row['Модель'] or '' }}</td>
                         <td>
                             {% if row['Yandex'] %}
@@ -204,46 +200,69 @@
         </div>
         <div id="errors" class="tab-content active">
             <h2>Ошибки соответствия между маркетплейсами</h2>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Маркетплейс</th>
-                        <th>Арт_MC</th>
-                        <th>Поставщик</th>
-                        <th>Артикул</th>
-                        <th>Модель</th>
-                        <th>Статус</th>
-                        <th>Нал</th>
-                        <th>Опт</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for error in errors %}
-                    <tr>
-                        <td>{{ error['Маркетплейс'] }}</td>
-                        <td>{{ error['Арт_MC'] }}</td>
-                        <td class="{% if error.diff['Поставщик'] %}diff-cell{% endif %}">{{ error['Поставщик'] }}</td>
-                        <td class="{% if error.diff['Артикул'] %}diff-cell{% endif %}">{{ error['Артикул'] }}</td>
-                        <td class="{% if error.diff['Модель'] %}diff-cell{% endif %}">{{ error['Модель'] }}</td>
-                        <td class="{% if error.diff['Статус'] %}diff-cell{% endif %}">{{ error['Статус'] }}</td>
-                        <td class="{% if error.diff['Нал'] %}diff-cell{% endif %}">{{ error['Нал'] }}</td>
-                        <td class="{% if error.diff['Опт'] %}diff-cell{% endif %}">{{ error['Опт'] }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+
+            {% if errors %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Маркетплейс</th>
+                            <th>Sklad</th>
+                            <th>Invask</th>
+                            <th>Okno</th>
+                            <th>United</th>
+                            <th>Модель</th>
+                            <th>Статус</th>
+                            <th>Нал</th>
+                            <th>Опт</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for error in errors %}
+                        <tr>
+                            <td>{{ error['Маркетплейс'] }}</td>
+                            <td class="{% if error.diff['Sklad'] %}diff-cell{% endif %}">{{ error['Sklad'] or '' }}</td>
+                            <td class="{% if error.diff['Invask'] %}diff-cell{% endif %}">{{ error['Invask'] or '' }}</td>
+                            <td class="{% if error.diff['Okno'] %}diff-cell{% endif %}">{{ error['Okno'] or '' }}</td>
+                            <td class="{% if error.diff['United'] %}diff-cell{% endif %}">{{ error['United'] or '' }}</td>
+                            <td class="{% if error.diff['Модель'] %}diff-cell{% endif %}">{{ error['Модель'] }}</td>
+                            <td class="{% if error.diff['Статус'] %}diff-cell{% endif %}">{{ error['Статус'] }}</td>
+                            <td class="{% if error.diff['Нал'] %}diff-cell{% endif %}">{{ error['Нал'] }}</td>
+                            <td class="{% if error.diff['Опт'] %}diff-cell{% endif %}">{{ error['Опт'] }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <p style="color:#555; margin-top:20px;">✅ Ошибок не найдено</p>
+            {% endif %}
         </div>
+
     </div>
 </div>
 
 <script>
 function switchTab(tabId) {
+    // Убираем active у всех
     document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
 
+    // Ставим active на выбранный
     document.getElementById(tabId).classList.add('active');
     event.currentTarget.classList.add('active');
+
+    // Сохраняем в localStorage
+    localStorage.setItem("activeTab", tabId);
 }
+
+// При загрузке страницы восстанавливаем активную вкладку
+window.onload = function() {
+    const savedTab = localStorage.getItem("activeTab") || "errors"; // по умолчанию "Ошибки"
+    document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+
+    document.getElementById(savedTab).classList.add('active');
+    document.querySelector(`.tab-button[onclick="switchTab('${savedTab}')"]`).classList.add('active');
+};
 </script>
 <script>
 function sortTable(columnIndex) {
