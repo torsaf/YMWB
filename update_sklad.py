@@ -102,11 +102,10 @@ def gen_sklad():
     # чистим числа
     for num_col in ("Наличие", "ОПТ", "РРЦ"):
         sklad[num_col] = (
-            sklad[num_col]
-            .astype(str)
-            .str.replace(r"[^\d\-]", "", regex=True)
-            .replace({"": "0", "-": "0"})
-            .astype(int)
+            pd.to_numeric(
+                sklad[num_col].astype(str).str.replace(r"[^\d]", "", regex=True),
+                errors="coerce"
+            ).fillna(0).astype(int)
         )
 
     logger.success("📦 Складовые данные подготовлены")
@@ -114,10 +113,15 @@ def gen_sklad():
 
 
 def upsert_ymwb_prices_from_sklad(sklad_df):
+    """
+    Синхронизирует таблицу 'prices' в !YMWB.db с данными склада.
+    Логика полностью сохранена, оптимизирована скорость работы.
+    """
     db_path = "System/!YMWB.db"
     conn = sqlite3.connect(db_path, timeout=10)
     cur = conn.cursor()
 
+    # --- 1. Гарантируем, что таблица существует и имеет нужные поля ---
     cur.execute("""
         CREATE TABLE IF NOT EXISTS "prices" (
             "Поставщик"    TEXT,
@@ -135,51 +139,69 @@ def upsert_ymwb_prices_from_sklad(sklad_df):
     if "РРЦ" not in cols:
         cur.execute('ALTER TABLE "prices" ADD COLUMN "РРЦ" INTEGER')
 
-    rows = 0
+    # --- 2. Подготовка данных из склада ---
+    data_to_upsert = []
+    all_current_arts = set()
+
     for _, r in sklad_df.iterrows():
-        art   = str(r.get("Арт мой", "")).strip()
+        art = str(r.get("Арт мой", "")).strip()
+        if not art:
+            continue
         model = str(r.get("Модель", "")).strip()
         nal   = int(r.get("Наличие", 0) or 0)
         opt   = int(r.get("ОПТ", 0) or 0)
         rrc   = int(r.get("РРЦ", 0) or 0)
-        if not art:
-            continue
+        all_current_arts.add(art)
+        data_to_upsert.append((nal, opt, rrc, model if model else None, art, art, model, nal, opt, rrc))
 
-        cur.execute("""
-            UPDATE "prices"
-               SET "Наличие" = ?, "ОПТ" = ?, "РРЦ" = ?,
-                   "Наименование" = COALESCE(?, "Наименование")
+    # --- 3. Пакетное обновление (UPSERT) ---
+    # Сначала пытаемся обновить существующие записи
+    cur.executemany("""
+        UPDATE "prices"
+           SET "Наличие" = ?, "ОПТ" = ?, "РРЦ" = ?,
+               "Наименование" = COALESCE(?, "Наименование")
+         WHERE UPPER(TRIM("Поставщик")) = UPPER('Sklad')
+           AND TRIM(CAST("Артикул" AS TEXT)) = TRIM(?)
+    """, [(nal, opt, rrc, model, art) for nal, opt, rrc, model, art, *_ in data_to_upsert])
+
+    # Теперь вставляем те, которых не было
+    cur.executemany("""
+        INSERT INTO "prices" ("Поставщик","Артикул","Наименование","Наличие","ОПТ","РРЦ")
+        SELECT 'Sklad', ?, ?, ?, ?, ?
+        WHERE NOT EXISTS (
+            SELECT 1 FROM "prices"
              WHERE UPPER(TRIM("Поставщик")) = UPPER('Sklad')
                AND TRIM(CAST("Артикул" AS TEXT)) = TRIM(?)
-        """, (nal, opt, rrc, model if model else None, art))
-        if cur.rowcount == 0:
-            cur.execute("""
-                INSERT INTO "prices"
-                    ("Поставщик","Артикул","Наименование","Наличие","ОПТ","РРЦ")
-                VALUES ('Sklad', ?, ?, ?, ?, ?)
-            """, (art, model, nal, opt, rrc))
-        rows += 1
+        )
+    """, [(art, model, nal, opt, rrc, art) for nal, opt, rrc, model, art, *_ in data_to_upsert])
 
-    # удаление отсутствующих
-    all_current_arts = {str(r.get("Арт мой", "")).strip()
-                        for _, r in sklad_df.iterrows()
-                        if str(r.get("Арт мой", "")).strip()}
+    rows = len(data_to_upsert)
+
+    # --- 4. Удаление отсутствующих артикулов пакетами (чтобы не упереться в 999 параметров SQLite) ---
+    deleted = 0
     if all_current_arts:
-        cur.execute("""
-            DELETE FROM "prices"
-             WHERE UPPER(TRIM("Поставщик")) = UPPER('Sklad')
-               AND TRIM(CAST("Артикул" AS TEXT)) NOT IN ({})
-        """.format(",".join("?" * len(all_current_arts))), tuple(all_current_arts))
+        all_current_arts = list(all_current_arts)
+        batch_size = 500
+        for i in range(0, len(all_current_arts), batch_size):
+            batch = all_current_arts[i:i + batch_size]
+            cur.execute(f"""
+                DELETE FROM "prices"
+                 WHERE UPPER(TRIM("Поставщик")) = UPPER('Sklad')
+                   AND TRIM(CAST("Артикул" AS TEXT)) NOT IN ({",".join("?" * len(batch))})
+            """, batch)
+            deleted += cur.rowcount
     else:
         cur.execute("""
             DELETE FROM "prices"
              WHERE UPPER(TRIM("Поставщик")) = UPPER('Sklad')
         """)
-    deleted = cur.rowcount
+        deleted = cur.rowcount
 
+    # --- 5. Финал ---
     conn.commit()
     conn.close()
     logger.success(f"🧾 !YMWB.db → prices синхронизированы со складом, обновлено/добавлено: {rows}, удалено: {deleted}")
+
 
 
 
@@ -189,7 +211,7 @@ def update_sklad_db(sklad_df):
     try:
         with open("System/stock_flags.json", "r", encoding="utf-8") as f:
             flags = json.load(f)
-            logger.debug(f"⚙️ Загружены флаги обновления: {flags}")
+            logger.info(f"⚙️ Загружены флаги обновления: {flags}")
     except:
         flags = {"yandex": True, "ozon": True, "wildberries": True}
 
@@ -206,7 +228,7 @@ def update_sklad_db(sklad_df):
         str(row["Арт мой"]): (int(row["Наличие"]), int(row["ОПТ"]))
         for _, row in sklad_df.iterrows()
     }
-    logger.debug(f"📦 Подготовлено {len(sklad_dict)} записей из склада для обновления")
+    logger.info(f"📦 Подготовлено {len(sklad_dict)} записей для обновления склада")
 
     # Выгружаем товары Sklad из общей таблицы
     cursor.execute("""

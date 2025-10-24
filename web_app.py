@@ -1087,6 +1087,8 @@ def download_log():
 def add_item(table_name):
     from datetime import datetime
     data = request.form.to_dict()
+    # 🧹 Убираем пробелы по бокам во всех текстовых полях
+    data = {k: (v.strip() if isinstance(v, str) else v) for k, v in data.items()}
 
     if 'Комментарий' in data and data['Комментарий'] is None:
         data['Комментарий'] = data.get('Комментарий') or ''
@@ -1274,7 +1276,7 @@ def detect_errors_across_marketplaces():
 
     errors = []
     # 👇 теперь проверяем и Sklad как поле
-    fields_to_check = ["Sklad", "Invask", "Okno", "United", "Модель", "Статус"]
+    fields_to_check = ["Sklad", "Invask", "Okno", "United", "Модель"]
 
     for art_mc, group in df.groupby("Sklad"):
         if len(group) <= 1:
@@ -1357,11 +1359,11 @@ def recompute_marketplace_core(market: str) -> int:
     for r in rows:
         row = dict(r)
         chosen_sup, nal, opt = choose_best_supplier_for_row(row, conn, use_row_sklad=True)
-        logger.debug(
-            f"🔎 {market.upper()} | {row.get('Модель', '—')} | Sklad={row.get('Sklad', '')}, "
-            f"Invask={row.get('Invask', '')}, Okno={row.get('Okno', '')}, United={row.get('United', '')} "
-            f"→ chosen={chosen_sup} nal={nal} opt={opt}"
-        )
+        # logger.debug(
+        #     f"🔎 {market.upper()} | {row.get('Модель', '—')} | Sklad={row.get('Sklad', '')}, "
+        #     f"Invask={row.get('Invask', '')}, Okno={row.get('Okno', '')}, United={row.get('United', '')} "
+        #     f"→ chosen={chosen_sup} nal={nal} opt={opt}"
+        # )
 
         if chosen_sup == '':
             new_nal = 0
@@ -1428,7 +1430,9 @@ def recompute_marketplace_core(market: str) -> int:
     conn.commit()
     conn.close()
 
-    logger.success(f"🔄 Пересчитано строк в {market.upper()}: {updated}")
+    total_rows = len(rows)
+    logger.info(f"📊 {market.upper()}: обработано {total_rows} строк, изменено {updated}")
+    logger.success(f"✅ Пересчёт завершён для {market.upper()}")
     return updated
 
 @app.route('/recompute/<market>', methods=['POST', 'GET'])

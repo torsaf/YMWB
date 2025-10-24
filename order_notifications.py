@@ -122,7 +122,15 @@ def update_stock(articul, platform, quantity=1):
             )
 
     # --- Общая часть: обновляем marketplace_base.db + !YMWB.db ---
+    # --- Вычисляем новый остаток ---
     new_stock = max(0, stock - quantity)
+
+    # --- Правило минимального остатка для внешних поставщиков ---
+    if supplier.lower() in ('invask', 'okno', 'united'):
+        if stock >= 3 and new_stock < 3:
+            logger.info(f"⚙️ Остаток {supplier}: {stock} → {new_stock} (<3) → принудительно 0 | {articul}")
+            new_stock = 0
+
     cur = conn.cursor()
     cur.execute(
         "UPDATE marketplace SET Нал = ?, \"Дата изменения\" = ? WHERE Sklad = ?",
@@ -142,6 +150,14 @@ def update_stock(articul, platform, quantity=1):
                 rowid = alt_row["rowid"]
                 current_qty = int(alt_row.get("Наличие", 0))
                 updated_qty = max(0, current_qty - quantity)
+
+                # --- Правило минимального остатка для Invask / Okno / United ---
+                if supplier.lower() in ('invask', 'okno', 'united'):
+                    if current_qty >= 3 and updated_qty < 3:
+                        logger.info(
+                            f"⚙️ !YMWB: {supplier} {current_qty} → {updated_qty} (<3) → принудительно 0 | {artikul_alt}")
+                        updated_qty = 0
+
                 alt_cur.execute("UPDATE prices SET Наличие = ? WHERE rowid = ?", (updated_qty, rowid))
                 logger.debug(f"🔧 YMWB: {artikul_alt} | {current_qty} → {updated_qty}")
             alt_conn.commit()
@@ -174,7 +190,7 @@ def get_orders_yandex_market():
     url_ym = f'https://api.partner.market.yandex.ru/campaigns/{campaign_id}/orders'
     headers = {"Authorization": f"Bearer {ym_token}"}
     params = {
-        "fake": "True",
+        "fake": "False",
         "status": "PROCESSING",
         "substatus": "STARTED"
     }
