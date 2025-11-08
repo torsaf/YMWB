@@ -92,7 +92,7 @@ def update_stock(articul, platform, quantity=1):
             sklad = pd.DataFrame(data[1:], columns=data[0])
 
             sklad['Наличие'] = pd.to_numeric(sklad['Наличие'], errors='coerce').fillna(0).astype(int)
-            sklad['Арт мой'] = sklad['Арт мой'].apply(lambda x: str(int(x)) if str(x).isdigit() else '')
+            sklad['Арт мой'] = sklad['Арт мой'].astype(str).str.strip()
 
             matched_rows = sklad[sklad['Арт мой'] == articul]
             if not matched_rows.empty:
@@ -102,7 +102,7 @@ def update_stock(articul, platform, quantity=1):
                 new_q = sklad.at[row_index, 'Наличие']
 
                 updated_data = sklad.iloc[:, :8].replace([float('inf'), float('-inf')], 0).fillna(0).values.tolist()
-                worksheet.update(values=updated_data, range_name='A2:H')
+                worksheet.update('A2:H', updated_data, value_input_option='USER_ENTERED')
 
                 telegram.notify(
                     token=telegram_got_token, chat_id=telegram_chat_id,
