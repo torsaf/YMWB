@@ -39,6 +39,7 @@ from logger_config import logger
 from notifiers import get_notifier
 from web_app import choose_best_supplier_for_row
 
+
 # Загрузка переменных окружения из .env
 load_dotenv(dotenv_path=os.path.join("System", ".env"))
 
@@ -46,6 +47,44 @@ load_dotenv(dotenv_path=os.path.join("System", ".env"))
 telegram_got_token = os.getenv('telegram_got_token')
 telegram_chat_id = os.getenv('telegram_chat_id')
 telegram = get_notifier('telegram')
+
+# --- Счётчик заказов с ежедневным сбросом ---
+counter_file = "System/order_counter.txt"
+
+def get_today_order_number():
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    # Если файла нет — создаём с первым заказом
+    if not os.path.exists(counter_file):
+        with open(counter_file, "w") as f:
+            f.write(f"{today}|1")
+        return 1
+
+    # Файл есть — читаем данные
+    with open(counter_file, "r") as f:
+        data = f.read().strip()
+
+    # Если файл был пустой или повреждён — заново создаем
+    if not data or "|" not in data:
+        with open(counter_file, "w") as f:
+            f.write(f"{today}|1")
+        return 1
+
+    saved_date, saved_num = data.split("|")
+    saved_num = int(saved_num)
+
+    # Новый день — сбрасываем счётчик
+    if saved_date != today:
+        with open(counter_file, "w") as f:
+            f.write(f"{today}|1")
+        return 1
+
+    # Та же дата — увеличиваем
+    new_num = saved_num + 1
+    with open(counter_file, "w") as f:
+        f.write(f"{today}|{new_num}")
+    return new_num
+
 
 
 def update_stock(articul, platform, quantity=1):
@@ -105,12 +144,13 @@ def update_stock(articul, platform, quantity=1):
                 worksheet.update('A2:H', updated_data, value_input_option='USER_ENTERED')
 
                 telegram.notify(
-                    token=telegram_got_token, chat_id=telegram_chat_id,
-                    message=(f"✅ Бот вычел со склада\n\n"
-                             f"Товар: \"{model}\"\nАртикул: *{articul}*\n"
-                             f"Опт: {opt_price}, РРЦ: {rrc_price}\n"
-                             f"Было: {prev_q} ➡️ стало: {new_q}\n"
-                             f"Склад: {supplier}"),
+                    token=telegram_got_token,
+                    chat_id=telegram_chat_id,
+                    message=(f"✅ *{supplier}:* списание\n\n"
+                             f"Товар: {model}\n"
+                             f"Артикул: {articul}\n"
+                             f"Опт: {opt_price} | РРЦ: {rrc_price}\n"
+                             f"Остаток: {prev_q} → {new_q}"),
                     parse_mode='markdown'
                 )
         except Exception as e:
@@ -171,11 +211,11 @@ def update_stock(articul, platform, quantity=1):
     if supplier.lower() != 'sklad':
         telegram.notify(
             token=telegram_got_token, chat_id=telegram_chat_id,
-            message=(f"✅ Бот вычел со склада\n\n"
-                     f"Товар: \"{model}\"\nАртикул: *{articul}*\n"
-                     f"Опт: {opt_price}, РРЦ: {rrc_price}\n"
-                     f"Было: {stock} ➡️ стало: {new_stock}\n"
-                     f"Склад: {supplier}"),
+            message=(f"✅ *{supplier}:* списание\n\n"
+                     f"Товар: {model}\n"
+                     f"Артикул: {articul}\n"
+                     f"Опт: {opt_price} | РРЦ: {rrc_price}\n"
+                     f"Остаток: {stock} → {new_stock}"),
             parse_mode='markdown'
         )
 
@@ -321,7 +361,14 @@ def notify_about_new_orders(orders, platform, supplier):
 
         logger.info(f"📦 Новый заказ: {order_id} ({platform})")
 
-        message = f"📦 Новый заказ на *{platform}*:\n\n"
+        # Получаем номер заказа на сегодня
+        order_number = get_today_order_number()
+
+        # Определяем цветовой маркер по площадке
+        platform_marker = "🟣" if platform.lower() == "wildberries" else "🟡" if platform.lower() == "yandex" else "🔵"
+
+        # Заголовок нового сообщения
+        message = f"*=== {platform} {platform_marker} Заказ № {order_number} ===*\n\n"
         message += f"ID заказа: {order_id}\n"
 
         items_to_update = []
@@ -338,17 +385,19 @@ def notify_about_new_orders(orders, platform, supplier):
                 offer_name = item.get('offerName', 'Не указано')
                 subsidy_amount = next(
                     (subsidy.get('amount') for subsidy in item.get('subsidies', []) if
-                     subsidy.get('type') == 'SUBSIDY'), 0
+                     subsidy.get('type') == 'SUBSIDY'),
+                    0
                 )
                 price = int(item.get('buyerPrice', 0))
                 total_price = int(subsidy_amount + price)
                 qty = int(item.get('count', 1))
 
-                message += f"\nАртикул: {offer_id}\n"
+                qty_marker = " 🆘" if qty > 1 else ""
                 message += f"Товар: {offer_name}\n"
-                qty_marker = " ⚠️" if qty > 1 else ""
-                message += f"Количество: {qty} шт.{qty_marker}\n"
+                message += f"Артикул: {offer_id}\n"
                 message += f"Цена: {total_price} р.\n"
+                message += f"Кол-во: {qty} шт.{qty_marker}\n"
+
                 items_to_update.append((offer_id, qty))
 
         elif supplier == 'Wildberries':
@@ -357,11 +406,12 @@ def notify_about_new_orders(orders, platform, supplier):
             price = str(order.get('convertedPrice'))[:-2]
             qty = int(order.get('quantity', 1))
 
-            message += f"Артикул: {article}\n"
+            qty_marker = " 🆘" if qty > 1 else ""
             message += f"Товар: {model}\n"
-            qty_marker = " ⚠️" if qty > 1 else ""
-            message += f"Количество: {qty} шт.{qty_marker}\n"
+            message += f"Артикул: {article}\n"
             message += f"Цена: {price} р.\n"
+            message += f"Кол-во: {qty} шт.{qty_marker}\n"
+
             items_to_update.append((article, qty))
 
         elif supplier == 'Ozon':
@@ -380,11 +430,12 @@ def notify_about_new_orders(orders, platform, supplier):
                 price = int(float(product.get('price', 0)))
                 qty = int(product.get('quantity', 1))
 
-                message += f"\nАртикул: {offer_id}\n"
+                qty_marker = " 🆘" if qty > 1 else ""
                 message += f"Товар: {product_name}\n"
-                qty_marker = " ⚠️" if qty > 1 else ""
-                message += f"Количество: {qty} шт.{qty_marker}\n"
+                message += f"Артикул: {offer_id}\n"
                 message += f"Цена: {price} р.\n"
+                message += f"Кол-во: {qty} шт.{qty_marker}\n"
+
                 items_to_update.append((offer_id, qty))
 
         # 1. Отправляем сообщение о заказе
