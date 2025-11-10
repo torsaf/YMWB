@@ -146,11 +146,10 @@ def update_stock(articul, platform, quantity=1):
                 telegram.notify(
                     token=telegram_got_token,
                     chat_id=telegram_chat_id,
-                    message=(f"✅ *{supplier}:* списание\n\n"
+                    message=(f"✅ *{supplier}:* {prev_q} → {new_q}\n\n"
                              f"Товар: {model}\n"
                              f"Артикул: {articul}\n"
-                             f"Опт: {opt_price} | РРЦ: {rrc_price}\n"
-                             f"Остаток: {prev_q} → {new_q}"),
+                             f"Опт: {opt_price} | РРЦ: {rrc_price}"),
                     parse_mode='markdown'
                 )
         except Exception as e:
@@ -211,11 +210,10 @@ def update_stock(articul, platform, quantity=1):
     if supplier.lower() != 'sklad':
         telegram.notify(
             token=telegram_got_token, chat_id=telegram_chat_id,
-            message=(f"✅ *{supplier}:* списание\n\n"
+            message=(f"✅ *{supplier}:* {stock} → {new_stock}\n\n"
                      f"Товар: {model}\n"
                      f"Артикул: {articul}\n"
-                     f"Опт: {opt_price} | РРЦ: {rrc_price}\n"
-                     f"Остаток: {stock} → {new_stock}"),
+                     f"Опт: {opt_price} | РРЦ: {rrc_price}"),
             parse_mode='markdown'
         )
 
