@@ -174,14 +174,34 @@ def update_wildberries():
 
         response = requests.post(url, headers=headers, json={"data": data}, timeout=10)
         logger.info(f"⏳ Отправка {len(data)} цен в Wildberries...")
+        # if response.status_code != 200:
+        #     logger.warning(f"⚠ Ответ от Wildberries API: {response.text}")
+        #     error_text = response.json().get('errorText', '')
+        #     if response.status_code == 208 or \
+        #        (response.status_code == 400 and ("No goods" in error_text or "already set" in error_text.lower())):
+        #         logger.success("✅ Цены Wildberries успешно обновлены")
+        #         return
+        #     raise Exception(f"WB: Статус-код {response.status_code}, Ответ: {response.text}")
         if response.status_code != 200:
             logger.warning(f"⚠ Ответ от Wildberries API: {response.text}")
-            error_text = response.json().get('errorText', '')
-            if response.status_code == 208 or \
-               (response.status_code == 400 and ("No goods" in error_text or "already set" in error_text.lower())):
-                logger.success("✅ Цены Wildberries успешно обновлены")
+
+            try:
+                error_text = response.json().get('errorText', '').lower()
+            except Exception:
+                error_text = ''
+
+            # ✅ Эти ответы считаем нормой
+            if response.status_code in (208, 400) and any(x in error_text for x in [
+                "no goods",
+                "already set",
+                "already exists"  # 🔥 ВОТ ЭТОГО ВАМ НЕ ХВАТАЛО
+            ]):
+                logger.info("⚠ WB: задача уже существует — считаем как успешное обновление")
                 return
+
+            # ❌ Всё остальное — реальная ошибка
             raise Exception(f"WB: Статус-код {response.status_code}, Ответ: {response.text}")
+
         logger.success("✅ Цены Wildberries успешно обновлены")
 
 

@@ -308,6 +308,11 @@ USERNAME = "admin"
 PASSWORD = os.getenv('PASSWORD')
 app.permanent_session_lifetime = timedelta(days=30)
 
+@app.after_request
+def no_index_headers(response):
+    response.headers["X-Robots-Tag"] = "noindex, nofollow"
+    return response
+
 @app.route('/favicon.ico')
 def favicon():
     from flask import send_from_directory

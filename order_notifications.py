@@ -51,6 +51,114 @@ telegram = get_notifier('telegram')
 # --- Счётчик заказов с ежедневным сбросом ---
 counter_file = "System/order_counter.txt"
 
+def write_order_to_gsheets(platform, order_id, items_to_update, price, supplier_fixed):
+
+    """
+    Добавляет заказ в таблицу КАЗНА (ВБ / ЯМ / ОЗ).
+    Записываем: ID, товар, артикул, ОПТ, РРЦ, статус.
+    Все данные берём из базы marketplace — как в update_stock.
+    """
+
+    # Определяем лист
+    sheet_map = {"wildberries": "ВБ", "yandex": "ЯМ", "ozon": "ОЗ"}
+    ws_name = sheet_map.get(platform.lower())
+    if ws_name is None:
+        logger.error(f"❌ Неизвестная платформа: {platform}")
+        return
+
+    # Подключение Google Sheets
+    gc = gspread.service_account(filename="System/my-python-397519-3688db4697d6.json")
+    sh = gc.open("КАЗНА")
+    ws = sh.worksheet(ws_name)
+
+    # Функция поиска строки вставки
+    def find_insert_row(ws):
+        column_a = ws.col_values(1)
+        for row_num, value in enumerate(column_a[1:], start=2):
+            if str(value).strip():
+                return max(2, row_num - 1)
+        return 2
+
+    insert_row = find_insert_row(ws)
+
+    # Берём основной товар заказа (первый)
+    item_art, _ = items_to_update[0]
+
+    # Читаем данные из базы
+    product_name = ""
+    supplier_name = ""
+    opt_price_value = 0
+    rrc_price_value = 0
+
+    try:
+        conn = sqlite3.connect("System/marketplace_base.db")
+        df_item = pd.read_sql_query(
+            "SELECT * FROM marketplace WHERE Sklad = ?",
+            conn,
+            params=(str(item_art),)
+        )
+
+        if not df_item.empty:
+            row0 = df_item.iloc[0]
+
+            product_name = row0.get("Модель")
+            rrc_price_value = int(row0.get("Цена", 0))
+
+            real_opt = int(row0.get("Опт", 0))
+            # Используем поставщика, выбранного в update_stock
+            opt_price_value = real_opt if supplier_fixed and supplier_fixed.lower() == "sklad" else 0
+
+
+    except Exception as e:
+        logger.error(f"❌ Ошибка чтения товара для таблицы: {e}")
+    finally:
+        conn.close()
+
+    today_iso = datetime.now().strftime("%Y-%m-%d")
+
+    if ws_name == "ВБ":
+        ws.update(
+            f"A{insert_row}",
+            [[today_iso]],
+            value_input_option="USER_ENTERED"
+        )
+        ws.update(f"C{insert_row}", [[order_id]])
+        ws.update(f"D{insert_row}", [[product_name]])
+        ws.update(f"F{insert_row}", [[opt_price_value]])
+        ws.update(f"G{insert_row}", [[rrc_price_value]])
+        ws.update(f"M{insert_row}", [["На сборке"]])
+
+    elif ws_name == "ЯМ":
+        ws.update(f"A{insert_row}", [["FBS"]])  # Колонка A = FBS
+        ws.update(
+            f"B{insert_row}",
+            [[today_iso]],
+            value_input_option="USER_ENTERED"
+        )
+        ws.update(f"C{insert_row}", [[order_id]])
+        ws.update(f"D{insert_row}", [[product_name]])
+        ws.update(f"F{insert_row}", [[opt_price_value]])
+        ws.update(f"G{insert_row}", [[rrc_price_value]])
+        ws.update(f"M{insert_row}", [["На сборке"]])
+
+    elif ws_name == "ОЗ":
+        ws.update(
+            f"A{insert_row}",
+            [[today_iso]],
+            value_input_option="USER_ENTERED"
+        )
+        ws.update(f"B{insert_row}", [[order_id]])  # ID → колонка B
+        ws.update(f"C{insert_row}", [[product_name]])  # Название → колонка C
+        ws.update(f"E{insert_row}", [[opt_price_value]])  # Опт → колонка E
+        ws.update(f"F{insert_row}", [[rrc_price_value]])  # РРЦ → колонка F
+        ws.update(f"L{insert_row}", [["На сборке"]])  # Статус → колонка L
+
+    ws.insert_row([], insert_row)
+
+    logger.success(f"📄 Заказ записан в '{ws_name}', строка {insert_row}")
+
+
+
 def get_today_order_number():
     today = datetime.now().strftime("%Y-%m-%d")
 
@@ -218,6 +326,7 @@ def update_stock(articul, platform, quantity=1):
         )
 
     conn.close()
+    return supplier
 
 
 
@@ -439,10 +548,13 @@ def notify_about_new_orders(orders, platform, supplier):
         # 1. Отправляем сообщение о заказе
         telegram.notify(token=telegram_got_token, chat_id=telegram_chat_id, message=message, parse_mode='markdown')
 
-        # 2. Вычитаем со склада
+        # 2. Вычитаем со склада и сохраняем выбранного поставщика
+        final_supplier = None
         for offer_id, qty in items_to_update:
-            logger.debug(f"🔧 Вызываем update_stock для {offer_id} | Платформа: {platform}, Кол-во: {qty}")
-            update_stock(offer_id, platform, qty)
+            final_supplier = update_stock(offer_id, platform, qty)
+
+        # 3. Передаём поставщика напрямую в Sheets
+        write_order_to_gsheets(platform, order_id, items_to_update, price, final_supplier)
 
         # --- Сразу после заказа обновляем маркетплейсы ---
         try:
