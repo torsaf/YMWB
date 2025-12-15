@@ -51,7 +51,8 @@ telegram = get_notifier('telegram')
 # --- Счётчик заказов с ежедневным сбросом ---
 counter_file = "System/order_counter.txt"
 
-def write_order_to_gsheets(platform, order_id, items_to_update, price, supplier_fixed):
+def write_order_to_gsheets(platform, order_id, items_to_update, rrc_price, supplier_fixed):
+
 
     """
     Добавляет заказ в таблицу КАЗНА (ВБ / ЯМ / ОЗ).
@@ -88,7 +89,7 @@ def write_order_to_gsheets(platform, order_id, items_to_update, price, supplier_
     product_name = ""
     supplier_name = ""
     opt_price_value = 0
-    rrc_price_value = 0
+    rrc_price_value = int(str(rrc_price).replace(" р.", "")) if rrc_price else 0
 
     try:
         conn = sqlite3.connect("System/marketplace_base.db")
@@ -102,7 +103,6 @@ def write_order_to_gsheets(platform, order_id, items_to_update, price, supplier_
             row0 = df_item.iloc[0]
 
             product_name = row0.get("Модель")
-            rrc_price_value = int(row0.get("Цена", 0))
 
             real_opt = int(row0.get("Опт", 0))
             # Используем поставщика, выбранного в update_stock
@@ -210,7 +210,7 @@ def update_stock(articul, platform, quantity=1):
 
     if df.empty:
         conn.close()
-        return
+        return None, None
 
     def format_price(value):
         try:
@@ -326,7 +326,7 @@ def update_stock(articul, platform, quantity=1):
         )
 
     conn.close()
-    return supplier
+    return supplier, rrc_price
 
 
 
@@ -550,11 +550,13 @@ def notify_about_new_orders(orders, platform, supplier):
 
         # 2. Вычитаем со склада и сохраняем выбранного поставщика
         final_supplier = None
+        rrc_price = None
+
         for offer_id, qty in items_to_update:
-            final_supplier = update_stock(offer_id, platform, qty)
+            final_supplier, rrc_price = update_stock(offer_id, platform, qty)
 
         # 3. Передаём поставщика напрямую в Sheets
-        write_order_to_gsheets(platform, order_id, items_to_update, price, final_supplier)
+        write_order_to_gsheets(platform, order_id, items_to_update, rrc_price, final_supplier)
 
         # --- Сразу после заказа обновляем маркетплейсы ---
         try:
