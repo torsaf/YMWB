@@ -51,7 +51,7 @@ def gen_sklad():
     # Оставляем строки, Статус = На складе
     filtered_data = [
         row for row in data[1:]
-        if len(row) >= 2 and row[0] == "На складе"
+        if len(row) >= 2 and row[0] in ("На складе", "На складе уценка")
     ]
     logger.debug(f"✅ Отфильтровано строк 'На складе': {len(filtered_data)}")
 
