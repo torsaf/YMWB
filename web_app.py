@@ -613,7 +613,7 @@ def toggle_supplier(supplier):
 @app.route('/')
 @requires_auth
 def index():
-    return show_table('yandex')
+    return show_table('wildberries')
 
 
 @app.route('/table/<table_name>')
