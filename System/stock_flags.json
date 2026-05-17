@@ -1,1 +1,1 @@
-{"yandex": true, "ozon": true, "wildberries": true, "suppliers": {"Sklad": true, "United": true, "Invask": true}}
+{"yandex": false, "ozon": false, "wildberries": true, "suppliers": {"Invask": false, "Okno": false, "United": true, "Sklad": true}}

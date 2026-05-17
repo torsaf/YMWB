@@ -251,13 +251,35 @@ def update_stock(articul, platform, quantity=1):
                 updated_data = sklad.iloc[:, :8].replace([float('inf'), float('-inf')], 0).fillna(0).values.tolist()
                 worksheet.update('A2:H', updated_data, value_input_option='USER_ENTERED')
 
+                # --- формируем сообщение в зависимости от остатка ---
+                if prev_q == 0:
+                    message = (
+                        f"🚨 *{supplier}:* 0 → 0\n\n"
+                        f"Товар: {model}\n"
+                        f"Артикул: {articul}\n\n"
+                        f"❗ Заказ при нулевом остатке"
+                    )
+
+                elif prev_q == 1 and new_q == 0:
+                    message = (
+                        f"✅ *{supplier}:* 1 → 0\n\n"
+                        f"Товар: {model}\n"
+                        f"Артикул: {articul}\n\n"
+                        f"⚠️ Товар закончился"
+                    )
+
+                else:
+                    message = (
+                        f"✅ *{supplier}:* {prev_q} → {new_q}\n\n"
+                        f"Товар: {model}\n"
+                        f"Артикул: {articul}\n"
+                        f"Опт: {opt_price} | РРЦ: {rrc_price}"
+                    )
+
                 telegram.notify(
                     token=telegram_got_token,
                     chat_id=telegram_chat_id,
-                    message=(f"✅ *{supplier}:* {prev_q} → {new_q}\n\n"
-                             f"Товар: {model}\n"
-                             f"Артикул: {articul}\n"
-                             f"Опт: {opt_price} | РРЦ: {rrc_price}"),
+                    message=message,
                     parse_mode='markdown'
                 )
         except Exception as e:

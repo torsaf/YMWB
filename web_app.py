@@ -45,51 +45,26 @@ def send_telegram_message(message: str):
     )
 
 
-def disable_invask_if_needed():
+CRON_SUPPLIERS = ("Invask", "Okno", "United", "Sklad")
+
+
+def set_supplier_state_if_needed(supplier: str, enabled: bool):
     try:
-        current = global_stock_flags.get("suppliers", {}).get("Invask", True)
-        if current:
-            logger.info("⏱️ CRON: Пятница — Invask сейчас ON → выключаем (toggle)")
-            requests.post("http://127.0.0.1:5050/toggle_supplier/Invask")
-        else:
-            logger.info("⏱️ CRON: Пятница — Invask уже OFF → ничего не делаем")
+        current = global_stock_flags.get("suppliers", {}).get(supplier, True)
+
+        if current == enabled:
+            state = "ON" if enabled else "OFF"
+            logger.info(f"⏱️ CRON: {supplier} уже {state} → ничего не делаем")
+            return
+
+        action = "включаем" if enabled else "выключаем"
+        logger.info(f"⏱️ CRON: {supplier} сейчас {'ON' if current else 'OFF'} → {action} (toggle)")
+
+        requests.post(f"http://127.0.0.1:5050/toggle_supplier/{supplier}")
+
     except Exception as e:
-        logger.warning(f"❌ CRON: Ошибка при отключении Invask: {e}")
-
-
-def enable_invask_if_needed():
-    try:
-        current = global_stock_flags.get("suppliers", {}).get("Invask", True)
-        if not current:
-            logger.info("⏱️ CRON: Воскресенье — Invask сейчас OFF → включаем (toggle)")
-            requests.post("http://127.0.0.1:5050/toggle_supplier/Invask")
-        else:
-            logger.info("⏱️ CRON: Воскресенье — Invask уже ON → ничего не делаем")
-    except Exception as e:
-        logger.warning(f"❌ CRON: Ошибка при включении Invask: {e}")
-
-def disable_okno_if_needed():
-    try:
-        current = global_stock_flags.get("suppliers", {}).get("Okno", True)
-        if current:
-            logger.info("⏱️ CRON: Пятница — Okno сейчас ON → выключаем (toggle)")
-            requests.post("http://127.0.0.1:5050/toggle_supplier/Okno")
-        else:
-            logger.info("⏱️ CRON: Пятница — Okno уже OFF → ничего не делаем")
-    except Exception as e:
-        logger.warning(f"❌ CRON: Ошибка при отключении Okno: {e}")
-
-def enable_okno_if_needed():
-    try:
-        current = global_stock_flags.get("suppliers", {}).get("Okno", True)
-        if not current:
-            logger.info("⏱️ CRON: Воскресенье — Okno сейчас OFF → включаем (toggle)")
-            requests.post("http://127.0.0.1:5050/toggle_supplier/Okno")
-        else:
-            logger.info("⏱️ CRON: Воскресенье — Okno уже ON → ничего не делаем")
-    except Exception as e:
-        logger.warning(f"❌ CRON: Ошибка при включении Okno: {e}")
-
+        action = "включении" if enabled else "отключении"
+        logger.warning(f"❌ CRON: Ошибка при {action} {supplier}: {e}")
 
 def backup_database():
     os.makedirs("System/backups", exist_ok=True)
@@ -546,6 +521,12 @@ def toggle_supplier(supplier):
             cursor_temp = conn_temp.cursor()
 
             for market in ['yandex', 'ozon', 'wildberries']:
+                if not global_stock_flags.get(market, True):
+                    logger.info(
+                        f"⏭ {market.upper()} выключен → поставщика {supplier} не трогаем"
+                    )
+                    continue
+
                 table_backup = f"backup_supplier_{supplier}_{market}"
                 try:
                     cursor_main.execute(f"SELECT Sklad, Нал FROM marketplace WHERE {where_clause}", (market,))
@@ -1455,10 +1436,24 @@ if __name__ == '__main__':
         scheduler.add_job(update_sklad_task, 'interval', minutes=5)
         scheduler.add_job(remove_all_products_from_all_actions, 'interval', minutes=1)  # Проверка Акций Озон
         scheduler.add_job(backup_database, 'cron', hour=2)  # каждый день в 2 ночи
-        scheduler.add_job(disable_invask_if_needed, 'cron', day_of_week='fri', hour=1, minute=0)
-        scheduler.add_job(enable_invask_if_needed, 'cron', day_of_week='sun', hour=15, minute=0)
-        scheduler.add_job(disable_okno_if_needed, 'cron', day_of_week='fri', hour=1, minute=0)
-        scheduler.add_job(enable_okno_if_needed, 'cron', day_of_week='sun', hour=15, minute=0)
+        for supplier in CRON_SUPPLIERS:
+            scheduler.add_job(
+                set_supplier_state_if_needed,
+                'cron',
+                day_of_week='fri',
+                hour=1,
+                minute=0,
+                args=[supplier, False]
+            )
+
+            scheduler.add_job(
+                set_supplier_state_if_needed,
+                'cron',
+                day_of_week='sun',
+                hour=15,
+                minute=0,
+                args=[supplier, True]
+            )
         scheduler.start()
         logger.info("📅 Планировщик запущен (обновление склада каждые 5 минут)")
     logger.info("🚀 Приложение запущено")
