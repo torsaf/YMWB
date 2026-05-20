@@ -1434,7 +1434,7 @@ if __name__ == '__main__':
     if not os.environ.get("WERKZEUG_RUN_MAIN"):  # предотвращает двойной запуск задач
         scheduler = BackgroundScheduler()
         scheduler.add_job(update_sklad_task, 'interval', minutes=5)
-        scheduler.add_job(remove_all_products_from_all_actions, 'interval', minutes=1)  # Проверка Акций Озон
+        scheduler.add_job(remove_all_products_from_all_actions, 'interval', minutes=10)  # Проверка Акций Озон
         scheduler.add_job(backup_database, 'cron', hour=2)  # каждый день в 2 ночи
         for supplier in CRON_SUPPLIERS:
             scheduler.add_job(

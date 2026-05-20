@@ -244,15 +244,28 @@ def update_sklad_db(sklad_df):
     for row in rows:
         rowid, marketplace, art_mc, status, model, current_nal, current_opt, markup_raw, current_price = row
 
+        try:
+            current_nal = int(current_nal or 0)
+        except Exception:
+            current_nal = 0
+
         table_flag = flags.get(marketplace.lower(), True)
         if not table_flag:
-            logger.info(f"⛔ {marketplace} отключён флагом — пропущен")
+            if current_nal != 0:
+                cursor.execute("""
+                    UPDATE marketplace
+                       SET Нал = 0,
+                           "Дата изменения" = ?
+                     WHERE rowid = ?
+                """, (datetime.now().strftime("%d.%m.%Y %H:%M"), rowid))
+                logger.info(f"⛔ {marketplace} отключён флагом → остаток принудительно обнулён")
+            else:
+                logger.info(f"⛔ {marketplace} отключён флагом → остаток уже 0")
             continue
 
         art_mc_str = str(art_mc).strip()
         status = (status or "").strip().lower()
         model = model.strip() if model else "—"
-        current_nal = int(current_nal) if current_nal is not None else 0
         current_opt = int(current_opt) if current_opt is not None else 0
         current_price = int(current_price) if current_price is not None else 0
         markup_raw = str(markup_raw).replace('%', '').replace(' ', '') if markup_raw else '0'

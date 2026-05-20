@@ -68,6 +68,11 @@ def update(flags):
     updated = 0
     cleared = 0
 
+    supplier_flags = flags.get("suppliers", {}) or {}
+
+    def supplier_enabled(supplier_name: str) -> bool:
+        return bool(supplier_flags.get(supplier_name, True))
+
     # --- 4. Основной цикл ---
     for row in all_rows:
         (rowid, mp, code_sklad, code_invask, code_okno, code_united,
@@ -78,6 +83,9 @@ def update(flags):
         model = model or "—"
 
         if not flags.get(mp, True):
+            if str(old_stock).strip() != "0":
+                cleared_rows.append((0, now_str, rowid))
+                cleared += 1
             continue
 
         # --- выключенные товары ---
@@ -91,6 +99,10 @@ def update(flags):
         def get_from_source(supplier_name, code_value):
             if not code_value:
                 return 0, None
+
+            if not supplier_enabled(supplier_name):
+                return 0, None
+
             return source_dict.get((supplier_name, str(code_value).strip()), (0, None))
 
         chosen_supplier = ""
