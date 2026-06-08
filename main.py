@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 from stock import gen_sklad, wb_update, ym_update, oz_update
 from order_notifications import check_for_new_orders
+from advantshop_notifications import check_advantshop_notifications
 from price_updater_master import update_all_prices
 import stock
 from dotenv import load_dotenv
@@ -195,7 +196,8 @@ def main():
     # send_telegram_message("Программа запущена⭐️")
 
     run_price_updates()  # Обновление остатков складов
-    run_safe("проверке новых заказов", check_for_new_orders)
+    run_safe("проверке новых заказов маркетплейсов", check_for_new_orders)
+    run_safe("проверке заказов и лидов AdvantShop", check_advantshop_notifications)
     run_safe("обновлении всех цен", update_all_prices)
 
     logger.success("🏁 Все задачи завершены успешно")
